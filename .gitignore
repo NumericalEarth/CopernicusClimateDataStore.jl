@@ -12,3 +12,6 @@ Manifest.toml
 
 # OS files
 .DS_Store
+
+*.png
+*.mp4
