@@ -33,6 +33,7 @@ makedocs(
     pages = [
         "Home" => "index.md",
         # "Examples" => example_pages,
+        "API Reference" => "api.md",
     ],
 )
 
