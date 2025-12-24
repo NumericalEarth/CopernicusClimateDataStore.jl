@@ -13,6 +13,7 @@ examples = [
     ("European temperature evolution", "european_temperature_evolution"),
 ]
 
+#=
 for (title, basename) in examples
     script_path = joinpath(examples_src_dir, basename * ".jl")
     @info "Building example: $title"
@@ -20,6 +21,7 @@ for (title, basename) in examples
 end
 
 example_pages = [title => joinpath("literated", basename * ".md") for (title, basename) in examples]
+=#
 
 makedocs(
     sitename = "CopernicusClimateDataStore.jl",
@@ -30,7 +32,9 @@ makedocs(
     ),
     pages = [
         "Home" => "index.md",
-        "Examples" => example_pages,
+        # "Examples" => example_pages,
+        "API Reference" => "api.md",
     ],
 )
+
 

@@ -15,3 +15,11 @@ Manifest.toml
 
 *.png
 *.mp4
+*.js
+*.html
+*.css
+
+docs/build/
+docs/literated/
+
+

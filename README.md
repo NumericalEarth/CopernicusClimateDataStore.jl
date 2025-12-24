@@ -1,98 +1,100 @@
-# CopernicusClimateDataStore.jl
+<!-- Title -->
+<h1 align="center">
+  CopernicusClimateDataStore.jl
+</h1>
 
-Julia wrapper around the [Copernicus Climate Data Store (CDS)](https://cds.climate.copernicus.eu/)
-for downloading ERA5 reanalysis data.
+<!-- description -->
+<p align="center">
+  <strong>🌍 Julia interface to the <a href="https://cds.climate.copernicus.eu/">Copernicus Climate Data Store</a> for downloading ERA5 reanalysis data</strong>
+</p>
 
-## Installation
+<p align="center">
+  <a href="https://numericalearth.github.io/CopernicusClimateDataStore.jl/dev/">
+    <img alt="Documentation" src="https://img.shields.io/badge/documentation-in%20development-orange?style=flat-square">
+  </a>
+</p>
+
+CopernicusClimateDataStore.jl wraps the [`era5cli`](https://era5cli.readthedocs.io/) command-line tool,
+providing a convenient Julia interface for downloading ERA5 hourly and monthly data to NetCDF or GRIB.
+
+### Installation
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/YOUR_USERNAME/CopernicusClimateDataStore.jl")
+Pkg.add(url="https://github.com/NumericalEarth/CopernicusClimateDataStore.jl")
 ```
 
-## CDS Account Setup
+### Before you start
 
-Before downloading data, you must:
+You need a Copernicus Climate Data Store account:
 
-1. **Create a CDS account** at https://cds.climate.copernicus.eu/
-2. **Accept the Terms of Use** for the ERA5 dataset at
-   https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=download#manage-licences
-3. **Configure your API key** by running:
+1. **Create an account** at https://cds.climate.copernicus.eu/
+2. **Accept the ERA5 Terms of Use** at https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels
+3. **Configure your API key**:
    ```bash
    era5cli config --key YOUR_PERSONAL_ACCESS_TOKEN
    ```
 
-Your personal access token can be found on your CDS profile page after logging in.
+Your personal access token is on your [CDS profile page](https://cds.climate.copernicus.eu/).
 
-## Quick Start
+### Quick start
+
+Download and visualize 2-metre temperature over Europe:
 
 ```julia
 using CopernicusClimateDataStore
 using NCDatasets
 using CairoMakie
 
-# Download 2m temperature for Europe, Jan 1, 2020 at 12:00 UTC
-files = hourly(
-    variables = "2m_temperature",
-    startyear = 2020,
-    months = 1,
-    days = 1,
-    hours = 12,
-    area = (lat = (35, 60), lon = (-10, 25)),
-    format = "netcdf",
-    outputprefix = "europe"
-)
+files = hourly(variables = "2m_temperature",
+               startyear = 2020,
+               months = 6,
+               days = 21,
+               hours = 12,
+               area = (lat = (35, 70), lon = (-15, 40)),
+               outputprefix = "europe")
 
-# Load the downloaded file
-filename = first(files)
-ds = NCDataset(filename)
-
-lon = ds["longitude"][:]
-lat = ds["latitude"][:]
-temp_C = ds["t2m"][:, :, 1] .- 273.15
+# Load the data
+ds = NCDataset(first(files))
+λ = ds["longitude"][:]         # degrees East
+φ = ds["latitude"][:]          # degrees North
+T = ds["t2m"][:, :, 1] .- 273.15  # K → °C
 close(ds)
 
 # Plot
-fig = Figure(size = (800, 600))
-ax = Axis(fig[1, 1], xlabel = "Longitude", ylabel = "Latitude")
-hm = heatmap!(ax, lon, lat, temp_C', colormap = :thermal)
-Colorbar(fig[1, 2], hm, label = "Temperature (°C)")
+fig, ax, hm = heatmap(λ, φ, T'; colormap = :thermal)
+Colorbar(fig[1, 2], hm; label = "Temperature (°C)")
+ax.xlabel = "λ (°E)"
+ax.ylabel = "φ (°N)"
 save("temperature.png", fig)
 ```
 
-## API
+![](temperature.png)
 
-### `hourly(; variables, startyear, ...)`
+### Key arguments
 
-Download ERA5 hourly data.
+| Argument | Description |
+|:---------|:------------|
+| `variables` | Variable name, e.g. `"2m_temperature"`, `"total_precipitation"` |
+| `startyear` | Year to download (required) |
+| `months` | Month or months (1–12) |
+| `days` | Day or days (1–31) |
+| `hours` | Hour or hours (0–23) |
+| `area` | Bounding box: `(lat = (south, north), lon = (west, east))` |
+| `format` | `"netcdf"` (default) or `"grib"` |
+| `outputprefix` | Prefix for output filename |
+| `merge` | Merge all data into a single file (default: `false`) |
 
-**Key arguments:**
-- `variables`: Variable name(s), e.g. `"2m_temperature"`
-- `startyear`, `endyear`: Year range
-- `months`, `days`, `hours`: Time filters
-- `area`: Bounding box `(lat = (south, north), lon = (west, east))`
-- `format`: `"netcdf"` (default) or `"grib"`
-- `outputprefix`: Prefix for output filename
-- `dryrun`: If `true`, print command without downloading
-- `splitmonths`: Split output by month (default: `true`)
-- `merge`: Merge all output into a single file (default: `false`)
-
-**Note:** By default, one file is created per month. Use `merge=true` for a single file.
+By default, one file is created per month. Use `merge = true` for a single file.
 
 ### Common variables
 
 | Request name | NetCDF name | Description |
-|-------------|-------------|-------------|
-| `2m_temperature` | `t2m` | 2 metre temperature (K) |
-| `10m_u_component_of_wind` | `u10` | 10 metre U wind (m/s) |
-| `10m_v_component_of_wind` | `v10` | 10 metre V wind (m/s) |
+|:-------------|:------------|:------------|
+| `2m_temperature` | `t2m` | 2-metre temperature (K) |
+| `10m_u_component_of_wind` | `u10` | 10-metre zonal wind (m/s) |
+| `10m_v_component_of_wind` | `v10` | 10-metre meridional wind (m/s) |
 | `total_precipitation` | `tp` | Total precipitation (m) |
+| `mean_sea_level_pressure` | `msl` | Mean sea level pressure (Pa) |
 
-## Examples
-
-See the `examples/` directory for Literate-style examples including an animation
-of European temperature evolution.
-
-## License
-
-Apache License 2.0
+See the [CDS ERA5 documentation](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels) for a complete list.
