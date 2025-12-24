@@ -30,3 +30,5 @@ JuliaLocalPreferences.toml
 */pixi.lock
 */pixi.toml
 */meta
+
+*.CondaPkg
