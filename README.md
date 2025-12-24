@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://glwagner.github.io/CopernicusClimateDataStore.jl/dev/">
+  <a href="https://numericalearth.github.io/CopernicusClimateDataStore.jl/dev/">
     <img alt="Documentation" src="https://img.shields.io/badge/documentation-in%20development-orange?style=flat-square">
   </a>
 </p>
@@ -21,7 +21,7 @@ providing a convenient Julia interface for downloading ERA5 hourly and monthly d
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/glwagner/CopernicusClimateDataStore.jl")
+Pkg.add(url="https://github.com/NumericalEarth/CopernicusClimateDataStore.jl")
 ```
 
 ### Before you start

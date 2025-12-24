@@ -10,7 +10,7 @@ providing a convenient Julia interface for downloading ERA5 and ERA5-Land data.
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/YOUR_USERNAME/CopernicusClimateDataStore.jl")
+Pkg.add(url="https://github.com/NumericalEarth/CopernicusClimateDataStore.jl")
 ```
 
 ## CDS Account Setup
