@@ -1,7 +1,7 @@
 name = "CopernicusClimateDataStore"
 uuid = "bce3f73f-acea-4481-bd86-df89ecc2cb46"
 version = "0.1.0"
-authors = ["Gregory Wagner <wagner.greg@gmail.com>"]
+authors = ["NumericalEarth and lovely collaborators"]
 
 [deps]
 CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
