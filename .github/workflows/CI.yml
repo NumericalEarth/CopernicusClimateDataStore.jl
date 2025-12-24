@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    tags: '*'
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.10'
+          - '1'  # Latest stable
+        os:
+          - ubuntu-latest
+          - macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+
+      - uses: julia-actions/cache@v2
+
+      - uses: julia-actions/julia-buildpkg@v1
+
+      # Unit tests (no credentials needed - uses mock CLI path)
+      - uses: julia-actions/julia-runtest@v1
+
+  # Separate job for download tests that require CDS credentials
+  download-test:
+    name: Download Test
+    runs-on: ubuntu-latest
+    # Only run on pushes to main (secrets aren't available on fork PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+
+      - uses: julia-actions/cache@v2
+
+      - uses: julia-actions/julia-buildpkg@v1
+
+      # Install era5cli and configure with CDS key
+      - name: Setup era5cli and CDS credentials
+        env:
+          CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
+        run: |
+          # First, trigger era5cli installation via Julia
+          julia --project=. -e '
+            using CopernicusClimateDataStore
+            println("Installing era5cli...")
+            install_era5cli()
+            println("era5cli installed at: ", era5cli_cmd())
+          '
+          
+          # Configure era5cli with the API key
+          # Find the era5cli executable in the CondaPkg environment
+          ERA5CLI=$(julia --project=. -e 'using CopernicusClimateDataStore; print(era5cli_cmd())')
+          
+          # Create era5cli config directory and file
+          mkdir -p ~/.config/era5cli
+          cat > ~/.config/era5cli/cds_key.txt << EOF
+          url: https://cds.climate.copernicus.eu/api
+          key: ${CDS_API_KEY}
+          EOF
+          
+          echo "era5cli configured with CDS credentials"
+
+      # Run a small download test (Kyoto Protocol date)
+      - name: Test ERA5 download
+        run: |
+          julia --project=. -e '
+            using CopernicusClimateDataStore
+
+            println("=" ^ 60)
+            println("ERA5 Download Test - Kyoto Protocol Ratification Date")
+            println("Date: February 16, 2005, 12:00 UTC")
+            println("=" ^ 60)
+            println()
+
+            # Download a small test file: 2m temperature for Feb 16, 2005, 12:00 UTC
+            # (Kyoto Protocol entered into force on this date)
+            # Use a small area to minimize download size
+            hourly(
+                variables = "2m_temperature",
+                startyear = 2005,
+                months = 2,
+                days = 16,
+                hours = 12,
+                area = (lat = (35, 45), lon = (-10, 0)),  # Small Atlantic region
+                format = "netcdf",
+                outputprefix = "kyoto_test"
+            )
+
+            println()
+            println("Checking for output files...")
+            
+            # Verify file was created
+            files = filter(f -> startswith(f, "kyoto_test") && endswith(f, ".nc"), readdir())
+            if isempty(files)
+                error("No output file found!")
+            else
+                println("Successfully downloaded:")
+                for f in files
+                    println("  ✓ $f ($(filesize(f)) bytes)")
+                end
+            end
+          '
+        timeout-minutes: 15  # CDS downloads can be slow
+
+      # Upload downloaded file as artifact (for debugging)
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: era5-test-download
+          path: "*.nc"
+          retention-days: 7
+          if-no-files-found: ignore
