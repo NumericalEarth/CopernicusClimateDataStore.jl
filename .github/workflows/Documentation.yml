@@ -7,55 +7,13 @@ on:
     tags: '*'
   pull_request:
 
-# Allow only one concurrent deployment
 concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: '1'
-
-      - uses: julia-actions/cache@v2
-
-      - name: Install dependencies
-        run: |
-          julia --project=docs -e '
-            using Pkg
-            Pkg.develop(PackageSpec(path=pwd()))
-            Pkg.instantiate()'
-
-      # Setup CDS credentials for examples that download data
-      - name: Setup CDS API credentials
-        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-        run: |
-          mkdir -p ~/.config/era5cli
-          echo "${{ secrets.CDS_API_KEY }}" > ~/.config/era5cli/cds_key.txt
-        env:
-          CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
-
-      - name: Build documentation
-        run: julia --project=docs docs/make.jl
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
-
-      - name: Upload documentation artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: documentation
-          path: docs/build/
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     permissions:
       contents: write
     steps:
@@ -73,12 +31,6 @@ jobs:
             using Pkg
             Pkg.develop(PackageSpec(path=pwd()))
             Pkg.instantiate()'
-
-      # Setup CDS credentials for examples
-      - name: Setup CDS API credentials
-        run: |
-          mkdir -p ~/.config/era5cli
-          echo "${{ secrets.CDS_API_KEY }}" > ~/.config/era5cli/cds_key.txt
         env:
           CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
 
@@ -87,4 +39,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
-
+          CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
