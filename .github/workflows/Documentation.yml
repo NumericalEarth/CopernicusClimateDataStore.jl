@@ -8,14 +8,15 @@ on:
   pull_request:
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  build-docs:
+    name: Build
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -31,12 +32,49 @@ jobs:
             using Pkg
             Pkg.develop(PackageSpec(path=pwd()))
             Pkg.instantiate()'
-        env:
-          CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
 
-      - name: Build and deploy documentation
+      - name: Build documentation
         run: julia --project=docs docs/make.jl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-build
+          path: docs/build/
+          retention-days: 7
+
+  deploy-docs:
+    name: Deploy
+    needs: build-docs
+    runs-on: ubuntu-latest
+    # Deploy on pushes to main or tags, and PRs from the same repo (not forks)
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)
+    permissions:
+      contents: write
+      pull-requests: read
+      statuses: write
+    concurrency:
+      group: docs-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: documentation-build
+          path: docs/build/
+
+      - name: Install Documenter
+        run: julia -e 'using Pkg; Pkg.add("Documenter")'
+
+      - name: Deploy documentation
+        run: julia docs/deploy.jl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
-          CDS_API_KEY: ${{ secrets.CDS_API_KEY }}

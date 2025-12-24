@@ -37,9 +37,4 @@ makedocs(
     ],
 )
 
-deploydocs(
-    repo = "github.com/NumericalEarth/CopernicusClimateDataStore.jl.git",
-    devbranch = "main",
-    push_preview = true,
-)
 
