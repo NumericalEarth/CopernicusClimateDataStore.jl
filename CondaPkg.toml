@@ -1,8 +1,9 @@
-# CondaPkg.toml - Python dependencies for CopernicusClimateDataStore.jl
-
 [deps]
 netcdf4 = ""
 hdf5 = ""
 
 [pip]
 era5cli = ">=2.0.1"
+
+    [pip.deps]
+    era5cli = ">=2.0.1"
