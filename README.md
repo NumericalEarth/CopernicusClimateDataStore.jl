@@ -15,12 +15,14 @@ Pkg.add(url="https://github.com/YOUR_USERNAME/CopernicusClimateDataStore.jl")
 Before downloading data, you must:
 
 1. **Create a CDS account** at https://cds.climate.copernicus.eu/
-2. **Accept the Terms of Use** for the ERA5 dataset:
+2. **Accept the Terms of Use** for the ERA5 dataset at
    https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=download#manage-licences
-3. **Configure era5cli** with your API key:
+3. **Configure your API key** by running:
    ```bash
    era5cli config --key YOUR_PERSONAL_ACCESS_TOKEN
    ```
+
+Your personal access token can be found on your CDS profile page after logging in.
 
 ## Quick Start
 
@@ -30,7 +32,7 @@ using NCDatasets
 using CairoMakie
 
 # Download 2m temperature for Europe, Jan 1, 2020 at 12:00 UTC
-hourly(
+files = hourly(
     variables = "2m_temperature",
     startyear = 2020,
     months = 1,
@@ -41,8 +43,8 @@ hourly(
     outputprefix = "europe"
 )
 
-# Find and load the downloaded file
-filename = first(filter(f -> endswith(f, ".nc"), readdir()))
+# Load the downloaded file
+filename = first(files)
 ds = NCDataset(filename)
 
 lon = ds["longitude"][:]
@@ -72,6 +74,10 @@ Download ERA5 hourly data.
 - `format`: `"netcdf"` (default) or `"grib"`
 - `outputprefix`: Prefix for output filename
 - `dryrun`: If `true`, print command without downloading
+- `splitmonths`: Split output by month (default: `true`)
+- `merge`: Merge all output into a single file (default: `false`)
+
+**Note:** By default, one file is created per month. Use `merge=true` for a single file.
 
 ### Common variables
 

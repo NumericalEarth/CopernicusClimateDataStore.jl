@@ -30,7 +30,6 @@ makedocs(
     ),
     pages = [
         "Home" => "index.md",
-        "Quick Start" => "quickstart.md",
         "Examples" => example_pages,
     ],
 )

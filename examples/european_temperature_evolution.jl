@@ -11,7 +11,7 @@ using CairoMakie
 #
 # We download 2m temperature for January 15, 2020 — all 24 hours — over Europe.
 
-hourly(
+files = hourly(
     variables = "2m_temperature",
     startyear = 2020,
     months = 1,
@@ -21,9 +21,7 @@ hourly(
     outputprefix = "europe_t2m"
 )
 
-# Find the downloaded file.
-
-filename = first(filter(f -> startswith(f, "europe_t2m") && endswith(f, ".nc"), readdir()))
+filename = first(files)
 @info "Downloaded: $filename ($(filesize(filename)) bytes)"
 
 # ## Load the data

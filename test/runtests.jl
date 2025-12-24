@@ -224,7 +224,7 @@ function test_kyoto_protocol_download(; dryrun=false)
     """
 
     # Download a small global snapshot
-    hourly(
+    result = hourly(
         variables = "2m_temperature",
         startyear = 2005,
         months = 2,
@@ -236,8 +236,15 @@ function test_kyoto_protocol_download(; dryrun=false)
         dryrun = dryrun
     )
 
-    if !dryrun
-        @info "Download complete! Check for kyoto_protocol_era5*.nc file."
+    if dryrun
+        @info "Dry run complete. Command:" result
+    else
+        @info "Download complete!" files=result
+        for f in result
+            @info "  $(basename(f)): $(filesize(f)) bytes"
+        end
     end
+
+    return result
 end
 

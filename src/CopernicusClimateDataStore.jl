@@ -218,7 +218,7 @@ end
 #####
 
 """
-    hourly(; variables, startyear, kwargs...)
+    hourly(; variables, startyear, kwargs...) -> Vector{String}
 
 Download ERA5 hourly data using `era5cli`.
 
@@ -246,33 +246,42 @@ Download ERA5 hourly data using `era5cli`.
 - `ensemble`: Download ensemble data instead of HRES (default: `false`).
 - `levels`: Pressure level(s) for 3D variables, or `:surface` for surface geopotential.
 - `statistics`: Download ensemble statistics (default: `false`).
+- `directory`: Directory to download files into (default: current directory).
 
 # Returns
-The `Cmd` object if `dryrun=true`, otherwise runs the command and returns `nothing`.
+- If `dryrun=true`: the `Cmd` object that would be executed.
+- Otherwise: a `Vector{String}` of paths to the downloaded file(s).
+
+# Output Files
+By default, `era5cli` creates one file per month (`splitmonths=true`). If you request
+multiple months, you will receive multiple files. Use `merge=true` to combine all
+data into a single file, or `splitmonths=false` to get one file per variable.
 
 # Example
 ```julia
 using CopernicusClimateDataStore
 
 # Download 2m temperature for a single day
-hourly(variables="2m_temperature",
-       startyear=2020,
-       months=1,
-       days=1,
-       hours=12,
-       area=(lat=(40, 50), lon=(-10, 10)),
-       format="netcdf")
+files = hourly(variables="2m_temperature",
+               startyear=2020,
+               months=1,
+               days=1,
+               hours=12,
+               area=(lat=(40, 50), lon=(-10, 10)),
+               format="netcdf")
+
+# files[1] contains the path to the downloaded NetCDF file
 ```
 
 # CDS Setup Required
 Before downloading, you must:
 1. Create an account at https://cds.climate.copernicus.eu/
 2. Accept the Terms of Use for the ERA5 dataset on the dataset page
-3. Set up your API credentials in `~/.cdsapirc`
+3. Configure your API key with `era5cli config --key YOUR_KEY`
 
 See https://cds.climate.copernicus.eu/how-to-api for details.
 """
-function hourly(; variables, startyear, kwargs...)
+function hourly(; variables, startyear, directory::String = pwd(), kwargs...)
     cmd = build_hourly_cmd(; variables, startyear, kwargs...)
 
     dryrun = get(kwargs, :dryrun, false)
@@ -282,9 +291,34 @@ function hourly(; variables, startyear, kwargs...)
         return cmd
     end
 
+    # Get the output prefix and format to identify new files
+    outputprefix = get(kwargs, :outputprefix, "era5")
+    format = get(kwargs, :format, "netcdf")
+    extension = format == "netcdf" ? ".nc" : ".grib"
+
+    # List existing files before download
+    files_before = Set(readdir(directory))
+
+    # Run the download in the specified directory
     @info "Running era5cli hourly download..."
-    run(cmd)
-    return nothing
+    cd(directory) do
+        run(cmd)
+    end
+
+    # Find new files that match the prefix and extension
+    files_after = Set(readdir(directory))
+    new_files = setdiff(files_after, files_before)
+    
+    # Filter to files matching our prefix and extension
+    downloaded = filter(new_files) do f
+        startswith(f, outputprefix) && endswith(f, extension)
+    end
+
+    # Return full paths, sorted for consistency
+    paths = sort([joinpath(directory, f) for f in downloaded])
+    
+    @info "Downloaded $(length(paths)) file(s)"
+    return paths
 end
 
 """
