@@ -1,0 +1,7 @@
+# CondaPkg.toml - Python dependencies for CopernicusClimateDataStore.jl
+
+[deps]
+
+[pip]
+era5cli = ">=2.0.1"
+

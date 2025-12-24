@@ -1,0 +1,17 @@
+name = "CopernicusClimateDataStore"
+uuid = "bce3f73f-acea-4481-bd86-df89ecc2cb46"
+version = "0.1.0"
+authors = ["Gregory Wagner <wagner.greg@gmail.com>"]
+
+[deps]
+CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
+
+[compat]
+CondaPkg = "0.2"
+julia = "1.9"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
