@@ -34,3 +34,9 @@ makedocs(
     ],
 )
 
+deploydocs(
+    repo = "github.com/glwagner/CopernicusClimateDataStore.jl.git",
+    devbranch = "main",
+    push_preview = true,
+)
+
