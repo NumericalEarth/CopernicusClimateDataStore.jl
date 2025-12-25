@@ -69,7 +69,9 @@ ax.ylabel = "φ (°N)"
 save("temperature.png", fig)
 ```
 
-![](temperature.png)
+This will produce
+
+<img width="1184" height="874" alt="image" src="https://github.com/user-attachments/assets/dcb19c81-bf8c-4183-b770-53a1f92ef6e1" />
 
 ### Key arguments
 
