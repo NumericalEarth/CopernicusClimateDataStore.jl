@@ -322,18 +322,192 @@ function hourly(; variables, startyear, directory::String = pwd(), kwargs...)
 end
 
 """
-    monthly(; variables, startyear, kwargs...)
+    build_monthly_cmd(; kwargs...)
+
+Build the command-line arguments for `era5cli monthly`.
+Returns a `Cmd` object ready to be executed.
+"""
+function build_monthly_cmd(;
+        variables,
+        startyear::Integer,
+        endyear::Integer = startyear,
+        months = nothing,
+        synoptic = nothing,
+        area = nothing,
+        format::String = "netcdf",
+        outputprefix::String = "era5",
+        overwrite::Bool = true,
+        threads::Integer = 1,
+        merge::Bool = false,
+        dryrun::Bool = false,
+        land::Bool = false,
+        ensemble::Bool = false,
+        levels = nothing,
+        cli::Union{String, Nothing} = nothing,
+    )
+
+    if isnothing(cli)
+        cli = era5cli_cmd()
+    end
+    args = String[cli, "monthly"]
+
+    # Variables (required)
+    if variables isa AbstractString
+        variables = [variables]
+    end
+    push!(args, "--variables")
+    append!(args, string.(variables))
+
+    # Year range
+    push!(args, "--startyear", string(startyear))
+    if endyear != startyear
+        push!(args, "--endyear", string(endyear))
+    end
+
+    # Optional time filters
+    if !isnothing(months)
+        push!(args, "--months")
+        append!(args, string.(months isa Integer ? [months] : months))
+    end
+
+    # Synoptic hours (monthly averaged by hour of day)
+    if !isnothing(synoptic)
+        push!(args, "--synoptic")
+        if synoptic isa Integer
+            push!(args, string(synoptic))
+        elseif !isempty(synoptic)
+            append!(args, string.(synoptic))
+        end
+        # Empty synoptic means all hours (0-23)
+    end
+
+    # Area constraint
+    formatted_area = format_area(area)
+    if !isnothing(formatted_area)
+        push!(args, "--area")
+        append!(args, string.(formatted_area))
+    end
+
+    # Pressure levels (for 3D variables)
+    if !isnothing(levels)
+        push!(args, "--levels")
+        if levels isa AbstractString || levels isa Symbol
+            push!(args, string(levels))
+        else
+            append!(args, string.(levels))
+        end
+    end
+
+    # Output options
+    push!(args, "--format", format)
+    push!(args, "--outputprefix", outputprefix)
+    push!(args, "--threads", string(threads))
+
+    # Boolean flags
+    if overwrite
+        push!(args, "--overwrite")
+    end
+
+    if merge
+        push!(args, "--merge")
+    end
+
+    if dryrun
+        push!(args, "--dryrun")
+    end
+
+    if land
+        push!(args, "--land")
+    end
+
+    if ensemble
+        push!(args, "--ensemble")
+    end
+
+    return Cmd(args)
+end
+
+"""
+    monthly(; variables, startyear, kwargs...) -> Vector{String}
+
 Download ERA5 monthly-averaged data using `era5cli`.
 
-Arguments are similar to [`hourly`](@ref), but downloads monthly means instead
-of hourly data. See `era5cli monthly --help` for full details.
+# Required Arguments
+- `variables`: Variable name(s) to download. Can be a string or vector of strings.
+- `startyear`: First year to download (integer).
+
+# Optional Arguments
+- `endyear`: Last year to download (default: same as `startyear`).
+- `months`: Month(s) to download (1-12). Default: all months.
+- `synoptic`: Hour(s) for synoptic monthly means (0-23). Default: monthly mean of daily means.
+  Use an empty vector `Int[]` to get all hours.
+- `area`: Bounding box for spatial subsetting. Can be:
+  - A tuple `(lat_max, lon_min, lat_min, lon_max)` in era5cli order
+  - A NamedTuple `(lat=(south, north), lon=(west, east))`
+- `format`: Output format, `"netcdf"` (default) or `"grib"`.
+- `outputprefix`: Prefix for output filenames (default: `"era5"`).
+- `overwrite`: Overwrite existing files without prompting (default: `true`).
+- `threads`: Number of parallel download threads (default: `1`).
+- `merge`: Merge all output into a single file (default: `false`).
+- `dryrun`: Print the request without downloading (default: `false`).
+- `land`: Download from ERA5-Land dataset (default: `false`).
+- `ensemble`: Download ensemble data instead of HRES (default: `false`).
+- `levels`: Pressure level(s) for 3D variables.
+- `directory`: Directory to download files into (default: current directory).
+
+# Returns
+- If `dryrun=true`: the `Cmd` object that would be executed.
+- Otherwise: a `Vector{String}` of paths to the downloaded file(s).
+
+# Example
+```julia
+using CopernicusClimateDataStore
+
+# Download monthly mean 2m temperature for 2020
+files = monthly(variables="2m_temperature",
+                startyear=2020,
+                area=(lat=(40, 50), lon=(-10, 10)),
+                format="netcdf")
+```
 """
-function monthly(; variables, startyear, kwargs...)
-    # Build similar to hourly but with "monthly" subcommand
-    cli = era5cli_cmd()
+function monthly(; variables, startyear, directory::String = pwd(), kwargs...)
+    cmd = build_monthly_cmd(; variables, startyear, kwargs...)
+
+    dryrun = get(kwargs, :dryrun, false)
+    if dryrun
+        @info "Dry run - command that would be executed:"
+        println(cmd)
+        return cmd
+    end
+
+    # Get the output prefix and format to identify new files
+    outputprefix = get(kwargs, :outputprefix, "era5")
+    format = get(kwargs, :format, "netcdf")
+    extension = format == "netcdf" ? ".nc" : ".grib"
+
+    # List existing files before download
+    files_before = Set(readdir(directory))
+
+    # Run the download in the specified directory
+    @info "Running era5cli monthly download..."
+    cd(directory) do
+        run(cmd)
+    end
+
+    # Find new files that match the prefix and extension
+    files_after = Set(readdir(directory))
+    new_files = setdiff(files_after, files_before)
     
-    # For now, delegate to hourly with a note that this should be separate
-    error("monthly() not yet implemented - use hourly() or call era5cli directly")
+    # Filter to files matching our prefix and extension
+    downloaded = filter(new_files) do f
+        startswith(f, outputprefix) && endswith(f, extension)
+    end
+
+    # Return full paths, sorted for consistency
+    paths = sort([joinpath(directory, f) for f in downloaded])
+    
+    @info "Downloaded $(length(paths)) file(s)"
+    return paths
 end
 
 """

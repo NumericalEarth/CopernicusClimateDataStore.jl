@@ -189,6 +189,76 @@ using CopernicusClimateDataStore
         @test occursin("kyoto_protocol_era5", cmd_str)
     end
 
+    @testset "Monthly command construction" begin
+        mock_cli = "/usr/bin/era5cli"
+
+        # Basic monthly command
+        cmd = CopernicusClimateDataStore.build_monthly_cmd(
+            variables = "2m_temperature",
+            startyear = 2020,
+            cli = mock_cli
+        )
+        cmd_str = string(cmd)
+        @test occursin("monthly", cmd_str)
+        @test occursin("--variables", cmd_str)
+        @test occursin("2m_temperature", cmd_str)
+        @test occursin("--startyear", cmd_str)
+        @test occursin("2020", cmd_str)
+
+        # Monthly with year range
+        cmd_range = CopernicusClimateDataStore.build_monthly_cmd(
+            variables = "2m_temperature",
+            startyear = 2018,
+            endyear = 2020,
+            cli = mock_cli
+        )
+        cmd_range_str = string(cmd_range)
+        @test occursin("--endyear", cmd_range_str)
+        @test occursin("2020", cmd_range_str)
+
+        # Monthly with synoptic hours
+        cmd_synoptic = CopernicusClimateDataStore.build_monthly_cmd(
+            variables = "2m_temperature",
+            startyear = 2020,
+            synoptic = [0, 6, 12, 18],
+            cli = mock_cli
+        )
+        cmd_synoptic_str = string(cmd_synoptic)
+        @test occursin("--synoptic", cmd_synoptic_str)
+        @test occursin("0", cmd_synoptic_str)
+        @test occursin("12", cmd_synoptic_str)
+
+        # Monthly with area
+        cmd_area = CopernicusClimateDataStore.build_monthly_cmd(
+            variables = "2m_temperature",
+            startyear = 2020,
+            area = (lat=(40.0, 60.0), lon=(-10.0, 20.0)),
+            cli = mock_cli
+        )
+        cmd_area_str = string(cmd_area)
+        @test occursin("--area", cmd_area_str)
+
+        # Monthly with merge
+        cmd_merge = CopernicusClimateDataStore.build_monthly_cmd(
+            variables = "2m_temperature",
+            startyear = 2020,
+            merge = true,
+            cli = mock_cli
+        )
+        cmd_merge_str = string(cmd_merge)
+        @test occursin("--merge", cmd_merge_str)
+
+        # Monthly with land dataset
+        cmd_land = CopernicusClimateDataStore.build_monthly_cmd(
+            variables = "2m_temperature",
+            startyear = 2020,
+            land = true,
+            cli = mock_cli
+        )
+        cmd_land_str = string(cmd_land)
+        @test occursin("--land", cmd_land_str)
+    end
+
 end
 
 #####

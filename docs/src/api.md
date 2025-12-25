@@ -4,6 +4,7 @@
 
 ```@docs
 hourly
+monthly
 info
 ```
 
@@ -18,7 +19,7 @@ era5cli_cmd
 
 ```@docs
 CopernicusClimateDataStore.build_hourly_cmd
+CopernicusClimateDataStore.build_monthly_cmd
 CopernicusClimateDataStore.format_area
-CopernicusClimateDataStore.monthly
 ```
 
