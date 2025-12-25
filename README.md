@@ -62,7 +62,7 @@ T = ds["t2m"][:, :, 1] .- 273.15  # K → °C
 close(ds)
 
 # Plot
-fig, ax, hm = heatmap(λ, φ, T'; colormap = :thermal)
+fig, ax, hm = heatmap(λ, φ, T; colormap = :thermal)
 Colorbar(fig[1, 2], hm; label = "Temperature (°C)")
 ax.xlabel = "λ (°E)"
 ax.ylabel = "φ (°N)"
