@@ -21,7 +21,7 @@ providing a convenient Julia interface for downloading ERA5 hourly and monthly d
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/NumericalEarth/CopernicusClimateDataStore.jl")
+Pkg.add("CopernicusClimateDataStore")
 ```
 
 ### Before you start
