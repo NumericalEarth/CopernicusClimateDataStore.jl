@@ -3,22 +3,24 @@
 ## Main Functions
 
 ```@docs
-hourly
-info
+retrieve
+read_cds_credentials
+CDSCredentials
 ```
 
-## Installation and CLI
+## Helper Functions
+
+```@docs
+submit_cds_request
+poll_request_status
+download_cds_file
+```
+
+## Legacy Functions (Deprecated)
+
+These functions use Python/CondaPkg. Use `retrieve()` instead.
 
 ```@docs
 install_era5cli
 era5cli_cmd
 ```
-
-## Internal Functions
-
-```@docs
-CopernicusClimateDataStore.build_hourly_cmd
-CopernicusClimateDataStore.format_area
-CopernicusClimateDataStore.monthly
-```
-

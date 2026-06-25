@@ -4,6 +4,7 @@ module CopernicusClimateDataStore
 # No Python dependency required!
 
 export retrieve, read_cds_credentials, CDSCredentials
+export submit_cds_request, poll_request_status, download_cds_file
 export install_era5cli, era5cli_cmd  # Legacy Python-based functions (deprecated)
 
 include("cds_client.jl")
