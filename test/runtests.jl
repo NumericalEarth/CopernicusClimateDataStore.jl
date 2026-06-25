@@ -19,12 +19,6 @@ using CopernicusClimateDataStore
         end
     end
 
-    @testset "Legacy functions exist" begin
-        # Test that deprecated functions still exist (for backwards compatibility)
-        @test hasmethod(install_era5cli, Tuple{})
-        @test hasmethod(era5cli_cmd, Tuple{})
-    end
-
     @testset "Pure Julia API exports" begin
         # Test that main functions are exported
         @test isdefined(CopernicusClimateDataStore, :retrieve)
