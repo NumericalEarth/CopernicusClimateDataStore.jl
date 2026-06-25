@@ -5,52 +5,8 @@ module CopernicusClimateDataStore
 
 export retrieve, read_cds_credentials, CDSCredentials
 export submit_cds_request, poll_request_status, download_cds_file
-export install_era5cli, era5cli_cmd  # Legacy Python-based functions (deprecated)
 
 include("cds_client.jl")
-
-# Legacy Python-based functions (kept for backwards compatibility, but deprecated)
-# Users should migrate to the pure Julia retrieve() function
-
-using CondaPkg
-
-"""
-    install_era5cli()
-
-**DEPRECATED:** Use pure Julia `retrieve()` function instead.
-
-Install the `era5cli` command-line tool (version ≥ 2.0.1) using CondaPkg.
-Returns the path to the installed CLI executable.
-"""
-function install_era5cli()
-    @warn "install_era5cli() is deprecated. Use pure Julia retrieve() function instead."
-    @info "Installing era5cli via CondaPkg..."
-    CondaPkg.add_pip("era5cli"; version=">=2.0.1")
-    cli = era5cli_cmd()
-    @info "era5cli installed at: $cli"
-    return cli
-end
-
-"""
-    era5cli_cmd()
-
-**DEPRECATED:** Use pure Julia `retrieve()` function instead.
-
-Return the absolute path to the `era5cli` executable.
-"""
-function era5cli_cmd()
-    @warn "era5cli_cmd() is deprecated. Use pure Julia retrieve() function instead."
-    cli = CondaPkg.which("era5cli")
-    if isnothing(cli)
-        @warn "era5cli not found. Attempting to install..."
-        CondaPkg.add_pip("era5cli"; version=">=2.0.1")
-        cli = CondaPkg.which("era5cli")
-        if isnothing(cli)
-            error("Failed to locate era5cli after installation.")
-        end
-    end
-    return cli
-end
 
 # Helper functions for data categorization (from original package)
 """
