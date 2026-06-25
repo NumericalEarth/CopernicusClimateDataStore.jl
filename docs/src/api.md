@@ -16,6 +16,14 @@ poll_request_status
 download_cds_file
 ```
 
+## Utility Functions
+
+```@docs
+CopernicusClimateDataStore.hourly
+CopernicusClimateDataStore.monthly
+CopernicusClimateDataStore.info
+```
+
 ## Legacy Functions (Deprecated)
 
 These functions use Python/CondaPkg. Use `retrieve()` instead.

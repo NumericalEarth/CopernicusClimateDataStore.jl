@@ -8,6 +8,22 @@ using Downloads
 using Dates
 using Base64
 
+"""
+    CDSCredentials
+
+Stores Copernicus Climate Data Store API credentials (URL and API key).
+
+# Fields
+- `url::String`: CDS API endpoint URL (e.g., "https://cds.climate.copernicus.eu/api")
+- `key::String`: Your personal CDS API key
+
+# Example
+```julia
+creds = CDSCredentials("https://cds.climate.copernicus.eu/api", "your-api-key")
+```
+
+Typically obtained automatically via `read_cds_credentials()`.
+"""
 struct CDSCredentials
     url::String
     key::String
