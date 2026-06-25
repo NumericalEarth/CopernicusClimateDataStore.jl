@@ -23,12 +23,3 @@ CopernicusClimateDataStore.hourly
 CopernicusClimateDataStore.monthly
 CopernicusClimateDataStore.info
 ```
-
-## Legacy Functions (Deprecated)
-
-These functions use Python/CondaPkg. Use `retrieve()` instead.
-
-```@docs
-install_era5cli
-era5cli_cmd
-```
