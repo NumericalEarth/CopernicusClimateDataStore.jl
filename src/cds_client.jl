@@ -150,8 +150,14 @@ function poll_request_status(credentials::CDSCredentials, status_endpoint::Strin
         end
 
         if status == "successful"
-            # Download URL is {status_endpoint}/results
-            return status_endpoint * "/results"
+            # Get results endpoint and extract actual download URL
+            results_url = status_endpoint * "/results"
+            results_response = HTTP.get(results_url, headers)
+            results_json = JSON3.read(String(results_response.body))
+
+            # Extract download URL from asset.value.href
+            download_url = results_json.asset.value.href
+            return download_url
         elseif status == "failed"
             error("CDS request failed. Check https://cds.climate.copernicus.eu/requests for details.")
         end
