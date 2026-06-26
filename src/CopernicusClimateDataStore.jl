@@ -61,7 +61,14 @@ function hourly(; variables::String, startyear::Int, months, days, hours,
 
     # Generate output filename
     mkpath(directory)
-    output_file = joinpath(directory, "$(outputprefix)_$(startyear)_$(first(months_arr))_$(first(days_arr)).nc")
+
+    # If requesting single date/hour, use outputprefix as-is (for NumericalEarth compatibility)
+    # Otherwise append date for batched downloads
+    if length(months_arr) == 1 && length(days_arr) == 1 && length(hours_arr) == 1
+        output_file = joinpath(directory, "$(outputprefix).nc")
+    else
+        output_file = joinpath(directory, "$(outputprefix)_$(startyear)_$(first(months_arr))_$(first(days_arr)).nc")
+    end
 
     # Skip if file exists and not overwriting
     if isfile(output_file) && !overwrite
