@@ -1,10 +1,7 @@
 # CopernicusClimateDataStore.jl
 
-Julia wrapper around the [Copernicus Climate Data Store (CDS)](https://cds.climate.copernicus.eu/)
-for downloading ERA5 reanalysis data.
-
-This package wraps the [`era5cli`](https://era5cli.readthedocs.io/) Python command-line tool,
-providing a convenient Julia interface for downloading ERA5 and ERA5-Land data.
+Pure Julia client for the [Copernicus Climate Data Store (CDS)](https://cds.climate.copernicus.eu/)
+for downloading ERA5 reanalysis data. No Python dependency required.
 
 ## Installation
 
@@ -20,9 +17,10 @@ Before downloading data, you must:
 1. **Create a CDS account** at <https://cds.climate.copernicus.eu/>
 2. **Accept the Terms of Use** for the ERA5 dataset at
    <https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=download#manage-licences>
-3. **Configure your API key** by running:
-   ```bash
-   era5cli config --key YOUR_PERSONAL_ACCESS_TOKEN
+3. **Create `~/.cdsapirc`** with your API credentials:
+   ```
+   url: https://cds.climate.copernicus.eu/api
+   key: YOUR_PERSONAL_ACCESS_TOKEN
    ```
 
 Your personal access token can be found on your CDS profile page after logging in.
@@ -34,20 +32,18 @@ Your personal access token can be found on your CDS profile page after logging i
 ```julia
 using CopernicusClimateDataStore
 
-# Download 2m temperature for a single snapshot
-files = hourly(
-    variables = "2m_temperature",
-    startyear = 2020,
-    months = 1,
-    days = 1,
-    hours = 12,
-    area = (lat = (35, 60), lon = (-10, 25)),
-    format = "netcdf",
-    outputprefix = "europe"
+params = Dict(
+    "product_type" => ["reanalysis"],
+    "variable"     => ["2m_temperature"],
+    "year"         => ["2020"],
+    "month"        => ["01"],
+    "day"          => ["01"],
+    "time"         => ["12:00"],
+    "area"         => [60, -10, 35, 25],   # [North, West, South, East]
+    "data_format"  => "netcdf",
 )
 
-# files contains the path(s) to the downloaded NetCDF file(s)
-filename = first(files)
+retrieve("reanalysis-era5-single-levels", params, "europe.nc")
 ```
 
 ### Load and plot
@@ -56,8 +52,7 @@ filename = first(files)
 using NCDatasets
 using CairoMakie
 
-# Open the NetCDF file
-ds = NCDataset(filename)
+ds = NCDataset("europe.nc")
 
 lon = ds["longitude"][:]
 lat = ds["latitude"][:]
@@ -73,25 +68,6 @@ hm = heatmap!(ax, lon, lat, temp_C', colormap = :thermal)
 Colorbar(fig[1, 2], hm, label = "Temperature (°C)")
 fig
 ```
-
-## Key Arguments
-
-| Argument | Description |
-|----------|-------------|
-| `variables` | Variable name(s), e.g. `"2m_temperature"` |
-| `startyear` | Year to download |
-| `months` | Month(s), 1–12 |
-| `days` | Day(s), 1–31 |
-| `hours` | Hour(s), 0–23 |
-| `area` | Bounding box: `(lat = (south, north), lon = (west, east))` |
-| `format` | `"netcdf"` or `"grib"` |
-| `outputprefix` | Prefix for output filename |
-| `dryrun` | If `true`, print command without downloading |
-| `splitmonths` | Split output by month (default: `true`) |
-| `merge` | Merge all output into a single file (default: `false`) |
-
-**Note:** By default, `era5cli` creates one file per month. If you request multiple months,
-you will receive multiple files. Use `merge=true` to combine all data into a single file.
 
 ## Common Variables
 
