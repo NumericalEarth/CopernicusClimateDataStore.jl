@@ -46,9 +46,17 @@ function hourly(; variables::String, startyear::Int, months, days, hours,
         "time" => hours_str
     )
 
-    # Add area if specified
+    # Add area if specified - CDS API v2 expects [north, west, south, east] format
     if area !== nothing
-        request_params["area"] = area
+        # Convert from (lat=(south,north), lon=(west,east)) to [north, west, south, east]
+        if area isa NamedTuple && haskey(area, :lat) && haskey(area, :lon)
+            lat_min, lat_max = area.lat
+            lon_min, lon_max = area.lon
+            request_params["area"] = [lat_max, lon_min, lat_min, lon_max]
+        else
+            # Assume already in correct format
+            request_params["area"] = area
+        end
     end
 
     # Generate output filename
