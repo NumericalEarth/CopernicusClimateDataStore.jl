@@ -14,7 +14,7 @@
   </a>
 </p>
 
-CopernicusClimateDataStore.jl is a pure Julia client for the [Copernicus Climate Data Store API v2](https://cds.climate.copernicus.eu/), with no Python dependency.
+CopernicusClimateDataStore.jl is a Julia client for the [Copernicus Climate Data Store API v2](https://cds.climate.copernicus.eu/).
 
 ### Installation
 

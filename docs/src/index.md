@@ -1,7 +1,7 @@
 # CopernicusClimateDataStore.jl
 
-Pure Julia client for the [Copernicus Climate Data Store (CDS)](https://cds.climate.copernicus.eu/)
-for downloading ERA5 reanalysis data. No Python dependency required.
+Julia client for the [Copernicus Climate Data Store (CDS)](https://cds.climate.copernicus.eu/)
+for downloading ERA5 reanalysis data.
 
 ## Installation
 
