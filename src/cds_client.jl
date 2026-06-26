@@ -1,5 +1,4 @@
-# Pure Julia CDS (Copernicus Climate Data Store) API client v2
-# Eliminates Python dependency by using HTTP.jl + JSON3.jl
+# Pure Julia CDS (Copernicus Climate Data Store) API client
 # Compatible with new CDS API (post-September 2024 migration)
 
 using HTTP
