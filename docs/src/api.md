@@ -3,22 +3,21 @@
 ## Main Functions
 
 ```@docs
-hourly
-info
+retrieve
+read_cds_credentials
+CDSCredentials
 ```
 
-## Installation and CLI
+## Helper Functions
 
 ```@docs
-install_era5cli
-era5cli_cmd
+submit_cds_request
+poll_request_status
+download_cds_file
 ```
 
-## Internal Functions
+## Utility Functions
 
 ```@docs
-CopernicusClimateDataStore.build_hourly_cmd
-CopernicusClimateDataStore.format_area
-CopernicusClimateDataStore.monthly
+CopernicusClimateDataStore.hourly
 ```
-
