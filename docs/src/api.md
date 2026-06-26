@@ -20,6 +20,4 @@ download_cds_file
 
 ```@docs
 CopernicusClimateDataStore.hourly
-CopernicusClimateDataStore.monthly
-CopernicusClimateDataStore.info
 ```
