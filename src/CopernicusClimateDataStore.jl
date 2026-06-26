@@ -6,13 +6,6 @@ export submit_cds_request, poll_request_status, download_cds_file
 include("cds_client.jl")
 
 """
-    hourly()
-
-Return a tuple of hourly frequency indicator for ERA5 downloads.
-"""
-hourly() = ("hourly",)
-
-"""
     hourly(; variables, startyear, months, days, hours, area=nothing,
            format="netcdf", outputprefix="era5", overwrite=false,
            threads=1, splitmonths=false, directory=".", additional_kw...)
