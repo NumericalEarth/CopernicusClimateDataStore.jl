@@ -55,31 +55,15 @@ jobs:
 
       - uses: julia-actions/julia-buildpkg@v1
 
-      # Install era5cli and configure with CDS key
-      - name: Setup era5cli and CDS credentials
+      # Write ~/.cdsapirc with CDS API key
+      - name: Setup CDS credentials
         env:
           CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
         run: |
-          # First, trigger era5cli installation via Julia
-          julia --project=. -e '
-            using CopernicusClimateDataStore
-            println("Installing era5cli...")
-            install_era5cli()
-            println("era5cli installed at: ", era5cli_cmd())
-          '
-          
-          # Configure era5cli with the API key
-          # Find the era5cli executable in the CondaPkg environment
-          ERA5CLI=$(julia --project=. -e 'using CopernicusClimateDataStore; print(era5cli_cmd())')
-          
-          # Create era5cli config directory and file
-          mkdir -p ~/.config/era5cli
-          cat > ~/.config/era5cli/cds_key.txt << EOF
+          cat > ~/.cdsapirc << EOF
           url: https://cds.climate.copernicus.eu/api
           key: ${CDS_API_KEY}
           EOF
-          
-          echo "era5cli configured with CDS credentials"
 
       # Run a small download test (Kyoto Protocol date)
       - name: Test ERA5 download
@@ -91,34 +75,24 @@ jobs:
             println("ERA5 Download Test - Kyoto Protocol Ratification Date")
             println("Date: February 16, 2005, 12:00 UTC")
             println("=" ^ 60)
-            println()
 
-            # Download a small test file: 2m temperature for Feb 16, 2005, 12:00 UTC
-            # (Kyoto Protocol entered into force on this date)
-            # Use a small area to minimize download size
-            hourly(
-                variables = "2m_temperature",
-                startyear = 2005,
-                months = 2,
-                days = 16,
-                hours = 12,
-                area = (lat = (35, 45), lon = (-10, 0)),  # Small Atlantic region
-                format = "netcdf",
-                outputprefix = "kyoto_test"
+            params = Dict(
+                "product_type" => ["reanalysis"],
+                "variable"     => ["2m_temperature"],
+                "year"         => ["2005"],
+                "month"        => ["02"],
+                "day"          => ["16"],
+                "time"         => ["12:00"],
+                "area"         => [45, -10, 35, 0],
+                "data_format"  => "netcdf",
             )
 
-            println()
-            println("Checking for output files...")
-            
-            # Verify file was created
-            files = filter(f -> startswith(f, "kyoto_test") && endswith(f, ".nc"), readdir())
-            if isempty(files)
-                error("No output file found!")
+            retrieve("reanalysis-era5-single-levels", params, "kyoto_test.nc")
+
+            if isfile("kyoto_test.nc")
+                println("Successfully downloaded: kyoto_test.nc ($(filesize("kyoto_test.nc")) bytes)")
             else
-                println("Successfully downloaded:")
-                for f in files
-                    println("  ✓ $f ($(filesize(f)) bytes)")
-                end
+                error("No output file found!")
             end
           '
         timeout-minutes: 15  # CDS downloads can be slow
