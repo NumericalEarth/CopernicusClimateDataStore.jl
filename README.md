@@ -89,3 +89,45 @@ This will produce
 | `mean_sea_level_pressure` | `msl` | Mean sea level pressure (Pa) |
 
 See the [CDS ERA5 documentation](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels) for a complete list.
+
+### Convenience functions
+
+For common workflows, use the `hourly()` and `yearly()` functions instead of building parameter dictionaries manually:
+
+#### Download hourly data
+
+```julia
+using CopernicusClimateDataStore
+
+# Download specific hours
+hourly(;
+    variables = "2m_temperature",
+    startyear = 2020,
+    months = 6,
+    days = 21,
+    hours = [0, 6, 12, 18],
+    area = [70, -15, 35, 40],  # [North, West, South, East]
+    directory = "data/ERA5"
+)
+```
+
+#### Download yearly data (recommended for long simulations)
+
+For multi-year simulations, download full years at once (8760-8784 hours per file) instead of individual hourly files:
+
+```julia
+# Download 10 years of temperature data in 10 files
+yearly(;
+    variables = "2m_temperature",
+    years = 2000:2010,
+    area = [70, -15, 35, 40],  # Optional: omit for global
+    directory = "data/ERA5_yearly"
+)
+```
+
+**Benefits of yearly files:**
+- **8784× fewer API calls** (one request per year instead of per hour)
+- **Reusable across simulations** (download once, use many times)
+- **Simpler file management** (one file per variable per year)
+
+**Note:** Download time and file size depend on region size (smaller regions are faster/smaller). CDS queue load also affects download time.

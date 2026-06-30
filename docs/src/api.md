@@ -20,4 +20,5 @@ download_cds_file
 
 ```@docs
 CopernicusClimateDataStore.hourly
+CopernicusClimateDataStore.yearly
 ```
