@@ -14,8 +14,7 @@
   </a>
 </p>
 
-CopernicusClimateDataStore.jl wraps the [`era5cli`](https://era5cli.readthedocs.io/) command-line tool,
-providing a convenient Julia interface for downloading ERA5 hourly and monthly data to NetCDF or GRIB.
+CopernicusClimateDataStore.jl is a Julia client for the [Copernicus Climate Data Store API v2](https://cds.climate.copernicus.eu/).
 
 ### Installation
 
@@ -30,9 +29,10 @@ You need a Copernicus Climate Data Store account:
 
 1. **Create an account** at https://cds.climate.copernicus.eu/
 2. **Accept the ERA5 Terms of Use** at https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels
-3. **Configure your API key**:
-   ```bash
-   era5cli config --key YOUR_PERSONAL_ACCESS_TOKEN
+3. **Create `~/.cdsapirc`** with your API credentials:
+   ```
+   url: https://cds.climate.copernicus.eu/api
+   key: YOUR_PERSONAL_ACCESS_TOKEN
    ```
 
 Your personal access token is on your [CDS profile page](https://cds.climate.copernicus.eu/).
@@ -46,18 +46,23 @@ using CopernicusClimateDataStore
 using NCDatasets
 using CairoMakie
 
-files = hourly(variables = "2m_temperature",
-               startyear = 2020,
-               months = 6,
-               days = 21,
-               hours = 12,
-               area = (lat = (35, 70), lon = (-15, 40)),
-               outputprefix = "europe")
+params = Dict(
+    "product_type" => ["reanalysis"],
+    "variable"     => ["2m_temperature"],
+    "year"         => ["2020"],
+    "month"        => ["06"],
+    "day"          => ["21"],
+    "time"         => ["12:00"],
+    "area"         => [70, -15, 35, 40],   # [North, West, South, East]
+    "data_format"  => "netcdf",
+)
+
+retrieve("reanalysis-era5-single-levels", params, "europe.nc")
 
 # Load the data
-ds = NCDataset(first(files))
-λ = ds["longitude"][:]         # degrees East
-φ = ds["latitude"][:]          # degrees North
+ds = NCDataset("europe.nc")
+λ = ds["longitude"][:]
+φ = ds["latitude"][:]
 T = ds["t2m"][:, :, 1] .- 273.15  # K → °C
 close(ds)
 
@@ -73,22 +78,6 @@ This will produce
 
 <img width="1184" height="874" alt="image" src="https://github.com/user-attachments/assets/dcb19c81-bf8c-4183-b770-53a1f92ef6e1" />
 
-### Key arguments
-
-| Argument | Description |
-|:---------|:------------|
-| `variables` | Variable name, e.g. `"2m_temperature"`, `"total_precipitation"` |
-| `startyear` | Year to download (required) |
-| `months` | Month or months (1–12) |
-| `days` | Day or days (1–31) |
-| `hours` | Hour or hours (0–23) |
-| `area` | Bounding box: `(lat = (south, north), lon = (west, east))` |
-| `format` | `"netcdf"` (default) or `"grib"` |
-| `outputprefix` | Prefix for output filename |
-| `merge` | Merge all data into a single file (default: `false`) |
-
-By default, one file is created per month. Use `merge = true` for a single file.
-
 ### Common variables
 
 | Request name | NetCDF name | Description |
@@ -100,3 +89,45 @@ By default, one file is created per month. Use `merge = true` for a single file.
 | `mean_sea_level_pressure` | `msl` | Mean sea level pressure (Pa) |
 
 See the [CDS ERA5 documentation](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels) for a complete list.
+
+### Convenience functions
+
+For common workflows, use the `hourly()` and `yearly()` functions instead of building parameter dictionaries manually:
+
+#### Download hourly data
+
+```julia
+using CopernicusClimateDataStore
+
+# Download specific hours
+hourly(;
+    variables = "2m_temperature",
+    startyear = 2020,
+    months = 6,
+    days = 21,
+    hours = [0, 6, 12, 18],
+    area = [70, -15, 35, 40],  # [North, West, South, East]
+    directory = "data/ERA5"
+)
+```
+
+#### Download yearly data (recommended for long simulations)
+
+For multi-year simulations, download full years at once (8760-8784 hours per file) instead of individual hourly files:
+
+```julia
+# Download 10 years of temperature data in 10 files
+yearly(;
+    variables = "2m_temperature",
+    years = 2000:2010,
+    area = [70, -15, 35, 40],  # Optional: omit for global
+    directory = "data/ERA5_yearly"
+)
+```
+
+**Benefits of yearly files:**
+- **8784× fewer API calls** (one request per year instead of per hour)
+- **Reusable across simulations** (download once, use many times)
+- **Simpler file management** (one file per variable per year)
+
+**Note:** Download time and file size depend on region size (smaller regions are faster/smaller). CDS queue load also affects download time.

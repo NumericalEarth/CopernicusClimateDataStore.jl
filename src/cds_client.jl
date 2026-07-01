@@ -144,14 +144,27 @@ function poll_request_status(credentials::CDSCredentials, status_endpoint::Strin
 
         status = result.status
 
-        if verbose && status != last_status
-            @info "CDS request: $status"
+        # Only show status changes, skip repetitive "running"
+        if verbose && status != last_status && status != "running"
+            @info "  CDS: $status"
+            last_status = status
+        elseif status == "running" && last_status != "running"
+            # Show "running" once, then silent polling
+            if verbose
+                @info "  CDS: processing..."
+            end
             last_status = status
         end
 
         if status == "successful"
-            # Download URL is {status_endpoint}/results
-            return status_endpoint * "/results"
+            # Get results endpoint and extract actual download URL
+            results_url = status_endpoint * "/results"
+            results_response = HTTP.get(results_url, headers)
+            results_json = JSON3.read(String(results_response.body))
+
+            # Extract download URL from asset.value.href
+            download_url = results_json.asset.value.href
+            return download_url
         elseif status == "failed"
             error("CDS request failed. Check https://cds.climate.copernicus.eu/requests for details.")
         end
@@ -174,7 +187,6 @@ function download_cds_file(url::String, output_path::String, credentials::CDSCre
     headers = ["PRIVATE-TOKEN" => credentials.key]
     Downloads.download(url, output_path; headers)
 
-    @info "Downloaded: $output_path ($(filesize(output_path)) bytes)"
     return output_path
 end
 
@@ -221,17 +233,8 @@ function retrieve(dataset::String,
     # Get credentials
     creds = isnothing(credentials) ? read_cds_credentials() : credentials
 
-    if verbose
-        nvars = length(get(params, "variable", []))
-        @info "Submitting CDS request: $dataset ($nvars variables)"
-    end
-
     # Submit request - returns status endpoint URL
     status_endpoint = submit_cds_request(creds, dataset, params)
-
-    if verbose
-        @info "Request submitted, polling for completion..."
-    end
 
     # Poll until ready - returns download URL
     download_url = poll_request_status(creds, status_endpoint;
