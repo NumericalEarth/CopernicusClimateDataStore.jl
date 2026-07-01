@@ -35,74 +35,9 @@ jobs:
 
       - uses: julia-actions/julia-buildpkg@v1
 
-      # Unit tests (no credentials needed - uses mock CLI path)
+      # All tests including download test (if credentials available)
       - uses: julia-actions/julia-runtest@v1
-
-  # Separate job for download tests that require CDS credentials
-  download-test:
-    name: Download Test
-    runs-on: ubuntu-latest
-    # Only run on pushes to main (secrets aren't available on fork PRs)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: '1'
-
-      - uses: julia-actions/cache@v2
-
-      - uses: julia-actions/julia-buildpkg@v1
-
-      # Write ~/.cdsapirc with CDS API key
-      - name: Setup CDS credentials
         env:
-          CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
-        run: |
-          cat > ~/.cdsapirc << EOF
-          url: https://cds.climate.copernicus.eu/api
-          key: ${CDS_API_KEY}
-          EOF
-
-      # Run a small download test (Kyoto Protocol date)
-      - name: Test ERA5 download
-        run: |
-          julia --project=. -e '
-            using CopernicusClimateDataStore
-
-            println("=" ^ 60)
-            println("ERA5 Download Test - Kyoto Protocol Ratification Date")
-            println("Date: February 16, 2005, 12:00 UTC")
-            println("=" ^ 60)
-
-            params = Dict(
-                "product_type" => ["reanalysis"],
-                "variable"     => ["2m_temperature"],
-                "year"         => ["2005"],
-                "month"        => ["02"],
-                "day"          => ["16"],
-                "time"         => ["12:00"],
-                "area"         => [45, -10, 35, 0],
-                "data_format"  => "netcdf",
-            )
-
-            retrieve("reanalysis-era5-single-levels", params, "kyoto_test.nc")
-
-            if isfile("kyoto_test.nc")
-                println("Successfully downloaded: kyoto_test.nc ($(filesize("kyoto_test.nc")) bytes)")
-            else
-                error("No output file found!")
-            end
-          '
-        timeout-minutes: 15  # CDS downloads can be slow
-
-      # Upload downloaded file as artifact (for debugging)
-      - name: Upload test artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: era5-test-download
-          path: "*.nc"
-          retention-days: 7
-          if-no-files-found: ignore
+          # Provide CDS credentials if available (only on main, not on forks)
+          CDSAPI_URL: https://cds.climate.copernicus.eu/api
+          CDSAPI_KEY: ${{ secrets.CDS_API_KEY }}
