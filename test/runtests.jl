@@ -29,6 +29,25 @@ using CopernicusClimateDataStore
         @test isdefined(CopernicusClimateDataStore, :download_cds_file)
     end
 
+    @testset "request_with_retries" begin
+        # Succeeds once the transient failures stop
+        calls = Ref(0)
+        result = CopernicusClimateDataStore.request_with_retries(; initial_delay=0.01) do
+            calls[] += 1
+            calls[] < 3 ? error("transient") : :ok
+        end
+        @test result == :ok
+        @test calls[] == 3
+
+        # Rethrows after exhausting attempts
+        calls[] = 0
+        @test_throws ErrorException CopernicusClimateDataStore.request_with_retries(; attempts=2, initial_delay=0.01) do
+            calls[] += 1
+            error("persistent")
+        end
+        @test calls[] == 2
+    end
+
     @testset "hourly file naming and skip-existing (offline)" begin
         # A single variable keeps the historical names; existing files short-circuit
         # the request entirely, so these run without credentials or network.
