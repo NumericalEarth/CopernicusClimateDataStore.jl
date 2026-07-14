@@ -14,6 +14,7 @@ CDSCredentials
 submit_cds_request
 poll_request_status
 download_cds_file
+CopernicusClimateDataStore.request_with_retries
 ```
 
 ## Utility Functions

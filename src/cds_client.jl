@@ -100,6 +100,28 @@ function parse_cdsapi_rc(path::String)
 end
 
 """
+    request_with_retries(f; attempts=4, initial_delay=1.0, what="CDS request")
+
+Call `f()`, retrying with exponential backoff on failure. The CDS gateway
+intermittently answers valid requests with transient errors (e.g. 502); without
+retries one blip kills a request that may be minutes into its queue wait — and
+takes every other request of a concurrent bundle down with it.
+"""
+function request_with_retries(f; attempts=4, initial_delay=1.0, what="CDS request")
+    delay = initial_delay
+    for attempt in 1:attempts
+        try
+            return f()
+        catch e
+            attempt < attempts || rethrow()
+            @warn "$what failed (attempt $attempt/$attempts); retrying in $(round(delay, digits=1)) s" exception=e
+            sleep(delay)
+            delay *= 2
+        end
+    end
+end
+
+"""
     submit_cds_request(credentials, dataset, params)
 
 Submit download request to CDS API v2. Returns status endpoint URL.
@@ -117,7 +139,7 @@ function submit_cds_request(credentials::CDSCredentials, dataset::String, params
     # v2 requires params wrapped in "inputs"
     body = JSON3.write(Dict("inputs" => params))
 
-    response = HTTP.post(endpoint, headers, body)
+    response = request_with_retries(() -> HTTP.post(endpoint, headers, body); what="CDS submit")
 
     # Extract status endpoint from Location header
     location = String(Dict(response.headers)["location"])
@@ -130,6 +152,10 @@ end
 
 Poll CDS request status until completion or timeout.
 Returns download URL when ready.
+
+Polling starts fast (1 s) and backs off exponentially to `poll_interval`, so small
+requests that complete in seconds aren't held up to a full fixed interval, while
+long queue waits still poll gently.
 """
 function poll_request_status(credentials::CDSCredentials, status_endpoint::String;
                              max_wait=3600, poll_interval=5, verbose=true)
@@ -137,9 +163,10 @@ function poll_request_status(credentials::CDSCredentials, status_endpoint::Strin
 
     start_time = time()
     last_status = ""
+    delay = min(1.0, poll_interval)
 
     while time() - start_time < max_wait
-        response = HTTP.get(status_endpoint, headers)
+        response = request_with_retries(() -> HTTP.get(status_endpoint, headers); what="CDS status poll")
         result = JSON3.read(String(response.body))
 
         status = result.status
@@ -159,7 +186,7 @@ function poll_request_status(credentials::CDSCredentials, status_endpoint::Strin
         if status == "successful"
             # Get results endpoint and extract actual download URL
             results_url = status_endpoint * "/results"
-            results_response = HTTP.get(results_url, headers)
+            results_response = request_with_retries(() -> HTTP.get(results_url, headers); what="CDS results fetch")
             results_json = JSON3.read(String(results_response.body))
 
             # Extract download URL from asset.value.href
@@ -169,7 +196,8 @@ function poll_request_status(credentials::CDSCredentials, status_endpoint::Strin
             error("CDS request failed. Check https://cds.climate.copernicus.eu/requests for details.")
         end
 
-        sleep(poll_interval)
+        sleep(delay)
+        delay = min(delay * 1.6, poll_interval)
     end
 
     error("Request timed out after $(max_wait)s")
@@ -185,7 +213,7 @@ function download_cds_file(url::String, output_path::String, credentials::CDSCre
 
     # Add authentication header
     headers = ["PRIVATE-TOKEN" => credentials.key]
-    Downloads.download(url, output_path; headers)
+    request_with_retries(() -> Downloads.download(url, output_path; headers); what="CDS file download")
 
     return output_path
 end

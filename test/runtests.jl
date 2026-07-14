@@ -29,6 +29,54 @@ using CopernicusClimateDataStore
         @test isdefined(CopernicusClimateDataStore, :download_cds_file)
     end
 
+    @testset "request_with_retries" begin
+        # Succeeds once the transient failures stop
+        calls = Ref(0)
+        result = CopernicusClimateDataStore.request_with_retries(; initial_delay=0.01) do
+            calls[] += 1
+            calls[] < 3 ? error("transient") : :ok
+        end
+        @test result == :ok
+        @test calls[] == 3
+
+        # Rethrows after exhausting attempts
+        calls[] = 0
+        @test_throws ErrorException CopernicusClimateDataStore.request_with_retries(; attempts=2, initial_delay=0.01) do
+            calls[] += 1
+            error("persistent")
+        end
+        @test calls[] == 2
+    end
+
+    @testset "hourly file naming and skip-existing (offline)" begin
+        # A single variable keeps the historical names; existing files short-circuit
+        # the request entirely, so these run without credentials or network.
+        mktempdir() do dir
+            single = joinpath(dir, "era5.nc")
+            touch(single)
+            paths = hourly(variables="2m_temperature", startyear=2020,
+                           months=1, days=1, hours=0, directory=dir)
+            @test paths == [single]
+
+            dated = joinpath(dir, "era5_2020_1_1.nc")
+            touch(dated)
+            paths = hourly(variables="2m_temperature", startyear=2020,
+                           months=1, days=1, hours=[0, 12], directory=dir)
+            @test paths == [dated]
+        end
+
+        # Multiple variables get per-variable files, returned in input order
+        mktempdir() do dir
+            t2m = joinpath(dir, "era5_2m_temperature.nc")
+            u10 = joinpath(dir, "era5_10m_u_component_of_wind.nc")
+            touch(t2m)
+            touch(u10)
+            paths = hourly(variables=["2m_temperature", "10m_u_component_of_wind"],
+                           startyear=2020, months=1, days=1, hours=0, directory=dir)
+            @test paths == [t2m, u10]
+        end
+    end
+
     @testset "ERA5 Download Integration Test" begin
         # Only run if CDS credentials are available
         has_credentials = try

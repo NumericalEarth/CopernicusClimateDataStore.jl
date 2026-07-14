@@ -8,7 +8,7 @@ include("cds_client.jl")
 
 """
     hourly(; variables, startyear, months, days, hours, area=nothing,
-           pressure_levels=nothing, format="netcdf", outputprefix="era5",
+           pressure_levels=nothing, levels=nothing, format="netcdf", outputprefix="era5",
            overwrite=false, threads=Threads.nthreads(), splitmonths=false, directory=".",
            additional_kw...)
 
@@ -16,16 +16,35 @@ Download ERA5 hourly data using the CDS API. This function provides compatibilit
 with NumericalEarth's ERA5 download interface.
 
 # Arguments
+- `variables`: Variable name(s) - String or Vector{String}. Each variable is its own
+               CDS request; requests are submitted concurrently (up to `threads` at a time)
+               so the whole bundle waits in the Copernicus queue together.
 - `pressure_levels`: Optional pressure levels in hPa (e.g., [1000, 850, 500]).
                      If provided, downloads from pressure-levels dataset instead of single-levels.
+- `levels`: The v0.1 (era5cli) spelling of `pressure_levels`: a vector of levels in hPa
+            selects the pressure-levels dataset; `:surface` and `nothing` mean single-levels.
 
-Returns a vector of downloaded file paths.
+Returns a vector of downloaded file paths, one per variable.
+
+# File naming
+A single variable keeps the v0.2 names (`outputprefix.nc` for a single date/hour,
+`outputprefix_year_month_day.nc` otherwise); with multiple variables the variable
+name is appended to `outputprefix` so each request gets its own file.
 """
-function hourly(; variables::String, startyear::Int, months, days, hours,
-                  area=nothing, pressure_levels=nothing, format::String="netcdf",
+function hourly(; variables::Union{String, AbstractVector{String}}, startyear::Int, months, days, hours,
+                  area=nothing, pressure_levels=nothing, levels=nothing, format::String="netcdf",
                   outputprefix::String="era5", overwrite::Bool=false,
                   threads::Int=Threads.nthreads(), splitmonths::Bool=false,
                   directory::String=".", additional_kw...)
+
+    variables_arr = variables isa String ? [variables] : collect(variables)
+
+    # `levels` must be handled explicitly: an unrecognized keyword lands silently in
+    # `additional_kw`, so a v0.1-style pressure-level request would download the
+    # single-levels product without warning.
+    if isnothing(pressure_levels) && levels isa AbstractVector
+        pressure_levels = levels
+    end
 
     # Convert single values to arrays
     months_arr = months isa AbstractVector ? months : [months]
@@ -35,17 +54,10 @@ function hourly(; variables::String, startyear::Int, months, days, hours,
     # Format hours as two-digit strings
     hours_str = [string(h, pad=2) * ":00" for h in hours_arr]
 
-    # Format date strings
-    dates_str = String[]
-    for month in months_arr, day in days_arr
-        push!(dates_str, string(startyear, "-", string(month, pad=2), "-", string(day, pad=2)))
-    end
-
     # Build request parameters
     request_params = Dict(
         "product_type" => "reanalysis",
         "format" => format,
-        "variable" => variables,
         "year" => string(startyear),
         "month" => [string(m, pad=2) for m in months_arr],
         "day" => [string(d, pad=2) for d in days_arr],
@@ -71,27 +83,33 @@ function hourly(; variables::String, startyear::Int, months, days, hours,
         request_params["pressure_level"] = [string(Int(p)) for p in pl_arr]
     end
 
-    # Generate output filename
     mkpath(directory)
 
     # If requesting single date/hour, use outputprefix as-is (for NumericalEarth compatibility)
     # Otherwise append date for batched downloads
-    if length(months_arr) == 1 && length(days_arr) == 1 && length(hours_arr) == 1
-        output_file = joinpath(directory, "$(outputprefix).nc")
-    else
-        output_file = joinpath(directory, "$(outputprefix)_$(startyear)_$(first(months_arr))_$(first(days_arr)).nc")
+    single_date = length(months_arr) == 1 && length(days_arr) == 1 && length(hours_arr) == 1
+    date_tag = single_date ? "" : "_$(startyear)_$(first(months_arr))_$(first(days_arr))"
+
+    function output_file(variable)
+        variable_tag = length(variables_arr) == 1 ? "" : "_$(variable)"
+        return joinpath(directory, "$(outputprefix)$(variable_tag)$(date_tag).nc")
     end
 
-    # Skip if file exists and not overwriting
-    if isfile(output_file) && !overwrite
-        return [output_file]
-    end
+    # Skip files that exist when not overwriting
+    pending = overwrite ? variables_arr : filter(variable -> !isfile(output_file(variable)), variables_arr)
 
-    # Submit download request
     dataset_id = pressure_levels === nothing ? "reanalysis-era5-single-levels" : "reanalysis-era5-pressure-levels"
-    retrieve(dataset_id, request_params, output_file)
 
-    return [output_file]
+    # One CDS request per variable, submitted concurrently
+    if !isempty(pending)
+        asyncmap(pending; ntasks=max(threads, 1)) do variable
+            params = copy(request_params)
+            params["variable"] = variable
+            retrieve(dataset_id, params, output_file(variable))
+        end
+    end
+
+    return map(output_file, variables_arr)
 end
 
 """
