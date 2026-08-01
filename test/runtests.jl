@@ -77,6 +77,43 @@ using CopernicusClimateDataStore
         end
     end
 
+    @testset "resolve_dataset (offline)" begin
+        @test CopernicusClimateDataStore.resolve_dataset(:era5, nothing) ==
+              ("reanalysis-era5-single-levels", "reanalysis")
+        @test CopernicusClimateDataStore.resolve_dataset(:era5, [1000, 850]) ==
+              ("reanalysis-era5-pressure-levels", "reanalysis")
+        @test CopernicusClimateDataStore.resolve_dataset(:era5_land, nothing) ==
+              ("reanalysis-era5-land", nothing)
+        @test_throws ArgumentError CopernicusClimateDataStore.resolve_dataset(:era5_land, [1000])
+        @test_throws ArgumentError CopernicusClimateDataStore.resolve_dataset(:bogus, nothing)
+    end
+
+    @testset "zip-wrapped CDS response unwrapping (offline)" begin
+        # reanalysis-era5-land wraps its netcdf output in a zip archive even when
+        # format=netcdf is requested; download_cds_file must transparently unwrap it.
+        mktempdir() do dir
+            payload_path = joinpath(dir, "data_0.nc")
+            write(payload_path, "fake netcdf bytes")
+
+            zip_path = joinpath(dir, "response.nc")
+            run(Cmd(`zip -j -q $zip_path $payload_path`))
+            @test CopernicusClimateDataStore.is_zip_file(zip_path)
+
+            CopernicusClimateDataStore.unwrap_zip_response!(zip_path)
+            @test !CopernicusClimateDataStore.is_zip_file(zip_path)
+            @test read(zip_path, String) == "fake netcdf bytes"
+        end
+
+        # A plain (non-zip) file is left untouched
+        mktempdir() do dir
+            plain_path = joinpath(dir, "plain.nc")
+            write(plain_path, "not a zip")
+            @test !CopernicusClimateDataStore.is_zip_file(plain_path)
+            CopernicusClimateDataStore.unwrap_zip_response!(plain_path)
+            @test read(plain_path, String) == "not a zip"
+        end
+    end
+
     @testset "ERA5 Download Integration Test" begin
         # Only run if CDS credentials are available
         has_credentials = try
