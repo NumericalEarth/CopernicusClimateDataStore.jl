@@ -1,6 +1,6 @@
 name = "CopernicusClimateDataStore"
 uuid = "bce3f73f-acea-4481-bd86-df89ecc2cb46"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["NumericalEarth and lovely collaborators"]
 
 [deps]
