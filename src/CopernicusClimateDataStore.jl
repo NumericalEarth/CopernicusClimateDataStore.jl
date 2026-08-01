@@ -7,10 +7,33 @@ export hourly, monthly, yearly
 include("cds_client.jl")
 
 """
+    resolve_dataset(dataset, pressure_levels)
+
+Resolve the `dataset` keyword (`:era5` or `:era5_land`) and optional pressure levels
+to a CDS dataset id and `product_type` value. Returns `(dataset_id, product_type)`,
+where `product_type` is `nothing` for datasets whose CDS requests take no
+`product_type` key (ERA5-Land).
+"""
+function resolve_dataset(dataset::Symbol, pressure_levels)
+    if dataset === :era5
+        dataset_id = isnothing(pressure_levels) ? "reanalysis-era5-single-levels" :
+                                                  "reanalysis-era5-pressure-levels"
+        return dataset_id, "reanalysis"
+    elseif dataset === :era5_land
+        isnothing(pressure_levels) ||
+            throw(ArgumentError("ERA5-Land has no pressure levels; use dataset = :era5 for pressure-level data"))
+        # reanalysis-era5-land requests take no product_type key
+        return "reanalysis-era5-land", nothing
+    else
+        throw(ArgumentError("Unknown dataset $(repr(dataset)); expected :era5 or :era5_land"))
+    end
+end
+
+"""
     hourly(; variables, startyear, months, days, hours, area=nothing,
-           pressure_levels=nothing, levels=nothing, format="netcdf", outputprefix="era5",
-           overwrite=false, threads=Threads.nthreads(), splitmonths=false, directory=".",
-           additional_kw...)
+           pressure_levels=nothing, levels=nothing, dataset=:era5, format="netcdf",
+           outputprefix="era5", overwrite=false, threads=Threads.nthreads(),
+           splitmonths=false, directory=".", additional_kw...)
 
 Download ERA5 hourly data using the CDS API. This function provides compatibility
 with NumericalEarth's ERA5 download interface.
@@ -23,6 +46,8 @@ with NumericalEarth's ERA5 download interface.
                      If provided, downloads from pressure-levels dataset instead of single-levels.
 - `levels`: The v0.1 (era5cli) spelling of `pressure_levels`: a vector of levels in hPa
             selects the pressure-levels dataset; `:surface` and `nothing` mean single-levels.
+- `dataset`: `:era5` (default) or `:era5_land` (`reanalysis-era5-land`, 0.1° land-only
+             reanalysis). ERA5-Land has no pressure levels.
 
 Returns a vector of downloaded file paths, one per variable.
 
@@ -32,8 +57,8 @@ A single variable keeps the v0.2 names (`outputprefix.nc` for a single date/hour
 name is appended to `outputprefix` so each request gets its own file.
 """
 function hourly(; variables::Union{String, AbstractVector{String}}, startyear::Int, months, days, hours,
-                  area=nothing, pressure_levels=nothing, levels=nothing, format::String="netcdf",
-                  outputprefix::String="era5", overwrite::Bool=false,
+                  area=nothing, pressure_levels=nothing, levels=nothing, dataset::Symbol=:era5,
+                  format::String="netcdf", outputprefix::String="era5", overwrite::Bool=false,
                   threads::Int=Threads.nthreads(), splitmonths::Bool=false,
                   directory::String=".", additional_kw...)
 
@@ -46,6 +71,8 @@ function hourly(; variables::Union{String, AbstractVector{String}}, startyear::I
         pressure_levels = levels
     end
 
+    dataset_id, product_type = resolve_dataset(dataset, pressure_levels)
+
     # Convert single values to arrays
     months_arr = months isa AbstractVector ? months : [months]
     days_arr = days isa AbstractVector ? days : [days]
@@ -56,13 +83,17 @@ function hourly(; variables::Union{String, AbstractVector{String}}, startyear::I
 
     # Build request parameters
     request_params = Dict(
-        "product_type" => "reanalysis",
         "format" => format,
         "year" => string(startyear),
         "month" => [string(m, pad=2) for m in months_arr],
         "day" => [string(d, pad=2) for d in days_arr],
         "time" => hours_str
     )
+
+    # ERA5-Land requests take no product_type key
+    if product_type !== nothing
+        request_params["product_type"] = product_type
+    end
 
     # Add area if specified - CDS API v2 expects [north, west, south, east] format
     if area !== nothing
@@ -98,8 +129,6 @@ function hourly(; variables::Union{String, AbstractVector{String}}, startyear::I
     # Skip files that exist when not overwriting
     pending = overwrite ? variables_arr : filter(variable -> !isfile(output_file(variable)), variables_arr)
 
-    dataset_id = pressure_levels === nothing ? "reanalysis-era5-single-levels" : "reanalysis-era5-pressure-levels"
-
     # One CDS request per variable, submitted concurrently
     if !isempty(pending)
         asyncmap(pending; ntasks=max(threads, 1)) do variable
@@ -129,6 +158,8 @@ files individually.
 - `month`: Month(s) to download - Integer (1-12) or Vector{Integer}
 - `area`: [south, west, north, east] bounding box (optional)
 - `pressure_levels`: Optional pressure levels in hPa (e.g., [1000, 850, 500])
+- `dataset`: `:era5` (default) or `:era5_land` (`reanalysis-era5-land`, 0.1° land-only
+             reanalysis). ERA5-Land has no pressure levels.
 - `format`: Output format (default: "netcdf")
 - `outputprefix`: Base filename prefix (default: "era5_monthly")
 - `directory`: Output directory (default: pwd())
@@ -173,6 +204,7 @@ function monthly(;
     month,
     area = nothing,
     pressure_levels = nothing,
+    dataset::Symbol = :era5,
     format = "netcdf",
     outputprefix = "era5_monthly",
     directory = pwd(),
@@ -180,6 +212,8 @@ function monthly(;
     threads = Threads.nthreads(),
     additional_kw...
 )
+    dataset_id, product_type = resolve_dataset(dataset, pressure_levels)
+
     # Normalize inputs to vectors
     var_list = variables isa String ? [variables] : collect(variables)
     year_list = year isa Integer ? [year] : collect(year)
@@ -215,7 +249,6 @@ function monthly(;
                 # Build CDS API request parameters for FULL MONTH
                 # All days (1-31), all hours (0-23) in ONE request
                 params = Dict{String, Any}(
-                    "product_type" => "reanalysis",
                     "variable" => [var],
                     "year" => [string(yr)],
                     "month" => [lpad(mon, 2, '0')],
@@ -223,6 +256,11 @@ function monthly(;
                     "time" => [string(h, pad=2) * ":00" for h in 0:23],  # ["00:00", ..., "23:00"]
                     "format" => format == "netcdf" ? "netcdf" : "grib"
                 )
+
+                # ERA5-Land requests take no product_type key
+                if product_type !== nothing
+                    params["product_type"] = product_type
+                end
 
                 # Add area constraint if specified
                 if !isnothing(area) && length(area) == 4
@@ -237,11 +275,9 @@ function monthly(;
                 end
 
                 region_str = isnothing(area) ? "global" : "regional"
-                dataset_str = isnothing(pressure_levels) ? "single-levels" : "pressure-levels"
-                @info "Downloading $var for $(yr)-$(lpad(mon, 2, '0')) ($dataset_str, $region_str)..."
+                @info "Downloading $var for $(yr)-$(lpad(mon, 2, '0')) ($dataset_id, $region_str)..."
 
                 # Download using direct CDS API
-                dataset_id = isnothing(pressure_levels) ? "reanalysis-era5-single-levels" : "reanalysis-era5-pressure-levels"
                 retrieve(dataset_id,
                         params,
                         output_path;
@@ -275,6 +311,8 @@ downloading hourly files individually.
 - `years`: Year(s) to download - Integer or range (e.g., 2000 or 2000:2010)
 - `area`: [north, west, south, east] bounding box (optional)
 - `pressure_levels`: Optional pressure levels in hPa (e.g., [1000, 850, 500])
+- `dataset`: `:era5` (default) or `:era5_land` (`reanalysis-era5-land`, 0.1° land-only
+             reanalysis). ERA5-Land has no pressure levels.
 - `format`: Output format (default: "netcdf")
 - `outputprefix`: Base filename prefix (default: "era5_yearly")
 - `directory`: Output directory (default: pwd())
@@ -309,6 +347,7 @@ function yearly(;
     years,
     area = nothing,
     pressure_levels = nothing,
+    dataset::Symbol = :era5,
     format = "netcdf",
     outputprefix = "era5_yearly",
     directory = pwd(),
@@ -316,6 +355,8 @@ function yearly(;
     threads = Threads.nthreads(),
     additional_kw...
 )
+    dataset_id, product_type = resolve_dataset(dataset, pressure_levels)
+
     # Normalize inputs to vectors
     var_list = variables isa String ? [variables] : collect(variables)
     year_list = years isa Integer ? [years] : collect(years)
@@ -349,7 +390,6 @@ function yearly(;
             # Build CDS API request parameters for FULL YEAR
             # All months, all days, all hours in ONE request
             params = Dict{String, Any}(
-                "product_type" => "reanalysis",
                 "variable" => [var],
                 "year" => [string(year)],
                 "month" => string.(1:12, pad=2),  # ["01", "02", ..., "12"]
@@ -357,6 +397,11 @@ function yearly(;
                 "time" => [string(h, pad=2) * ":00" for h in 0:23],  # ["00:00", ..., "23:00"]
                 "format" => format == "netcdf" ? "netcdf" : "grib"
             )
+
+            # ERA5-Land requests take no product_type key
+            if product_type !== nothing
+                params["product_type"] = product_type
+            end
 
             # Add area constraint if specified
             if !isnothing(area) && length(area) == 4
@@ -371,11 +416,9 @@ function yearly(;
             end
 
             region_str = isnothing(area) ? "global" : "regional"
-            dataset_str = isnothing(pressure_levels) ? "single-levels" : "pressure-levels"
-            @info "Downloading $var for year $year ($dataset_str, $region_str)..."
+            @info "Downloading $var for year $year ($dataset_id, $region_str)..."
 
             # Download using direct CDS API
-            dataset_id = isnothing(pressure_levels) ? "reanalysis-era5-single-levels" : "reanalysis-era5-pressure-levels"
             retrieve(dataset_id,
                     params,
                     output_path;

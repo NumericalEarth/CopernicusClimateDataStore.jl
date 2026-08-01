@@ -215,6 +215,34 @@ function download_cds_file(url::String, output_path::String, credentials::CDSCre
     headers = ["PRIVATE-TOKEN" => credentials.key]
     request_with_retries(() -> Downloads.download(url, output_path; headers); what="CDS file download")
 
+    unwrap_zip_response!(output_path)
+
+    return output_path
+end
+
+# Some CDS datasets (e.g. reanalysis-era5-land) wrap their netcdf output in a zip
+# archive even when format=netcdf is requested, so a downloaded "*.nc" file may
+# actually be a zip. Detect the zip magic bytes and, if present, replace the file
+# in place with its single extracted member.
+function is_zip_file(path::String)
+    isfile(path) || return false
+    open(path, "r") do io
+        magic = read(io, 4)
+        return length(magic) == 4 && magic[1:2] == UInt8[0x50, 0x4b]
+    end
+end
+
+function unwrap_zip_response!(output_path::String)
+    is_zip_file(output_path) || return output_path
+
+    mktempdir() do tmpdir
+        run(`unzip -o -q $output_path -d $tmpdir`)
+        extracted = filter(isfile, readdir(tmpdir; join=true))
+        isempty(extracted) && error("CDS response at $output_path was a zip archive but contained no files")
+        length(extracted) > 1 && @warn "CDS zip response at $output_path contained multiple files; using the first" extracted
+        mv(first(extracted), output_path; force=true)
+    end
+
     return output_path
 end
 
