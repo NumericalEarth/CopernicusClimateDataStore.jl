@@ -1,7 +1,7 @@
 module CopernicusClimateDataStore
 
 export retrieve, read_cds_credentials, CDSCredentials
-export submit_cds_request, poll_request_status, download_cds_file
+export submit_cds_request, poll_request_status, download_cds_file, extract_zip_members
 export hourly, monthly, yearly
 
 include("cds_client.jl")
@@ -33,7 +33,7 @@ end
     hourly(; variables, startyear, months, days, hours, area=nothing,
            pressure_levels=nothing, levels=nothing, dataset=:era5, format="netcdf",
            outputprefix="era5", overwrite=false, threads=Threads.nthreads(),
-           splitmonths=false, directory=".", poll_interval=1, additional_kw...)
+           splitmonths=false, directory=".", poll_interval=1, batch=false, additional_kw...)
 
 Download ERA5 hourly data using the CDS API. This function provides compatibility
 with NumericalEarth's ERA5 download interface.
@@ -53,9 +53,16 @@ with NumericalEarth's ERA5 download interface.
                    (default 1, matching CDSAPI.jl). Hourly requests are small and
                    usually finish within a minute, so a long ceiling mostly adds idle
                    time after the job completes. `monthly` and `yearly` keep 10.
+- `batch`: Send all `variables` in a single CDS request instead of one request per variable
+           (default `false`). CDS runs one job at a time per user, so a single request is
+           several times faster than concurrent ones. Existing files are not reused
+           (`overwrite` and `threads` are ignored), and the returned files each hold one or
+           more of the variables: CDS returns a zip with one NetCDF per step type when
+           instantaneous and accumulated variables are mixed, and each member is kept.
 - Remaining keywords are forwarded to `retrieve`.
 
-Returns a vector of downloaded file paths, one per variable.
+Returns a vector of downloaded file paths, one per variable (or, with `batch=true`, one per
+delivered NetCDF file).
 
 # File naming
 A single variable keeps the v0.2 names (`outputprefix.nc` for a single date/hour,
@@ -66,7 +73,7 @@ function hourly(; variables::Union{String, AbstractVector{String}}, startyear::I
                   area=nothing, pressure_levels=nothing, levels=nothing, dataset::Symbol=:era5,
                   format::String="netcdf", outputprefix::String="era5", overwrite::Bool=false,
                   threads::Int=Threads.nthreads(), splitmonths::Bool=false,
-                  directory::String=".", poll_interval=1, additional_kw...)
+                  directory::String=".", poll_interval=1, batch::Bool=false, additional_kw...)
 
     variables_arr = variables isa String ? [variables] : collect(variables)
 
@@ -130,6 +137,14 @@ function hourly(; variables::Union{String, AbstractVector{String}}, startyear::I
     function output_file(variable)
         variable_tag = length(variables_arr) == 1 ? "" : "_$(variable)"
         return joinpath(directory, "$(outputprefix)$(variable_tag)$(date_tag).nc")
+    end
+
+    if batch
+        params = copy(request_params)
+        params["variable"] = variables_arr
+        batch_path = joinpath(directory, "$(outputprefix)$(date_tag).nc")
+        retrieve(dataset_id, params, batch_path; poll_interval, unwrap_zip=false, additional_kw...)
+        return extract_zip_members(batch_path)
     end
 
     # Skip files that exist when not overwriting
