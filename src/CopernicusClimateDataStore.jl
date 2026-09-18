@@ -33,7 +33,7 @@ end
     hourly(; variables, startyear, months, days, hours, area=nothing,
            pressure_levels=nothing, levels=nothing, dataset=:era5, format="netcdf",
            outputprefix="era5", overwrite=false, threads=Threads.nthreads(),
-           splitmonths=false, directory=".", additional_kw...)
+           splitmonths=false, directory=".", poll_interval=1, additional_kw...)
 
 Download ERA5 hourly data using the CDS API. This function provides compatibility
 with NumericalEarth's ERA5 download interface.
@@ -49,6 +49,12 @@ with NumericalEarth's ERA5 download interface.
 - `dataset`: `:era5` (default) or `:era5_land` (`reanalysis-era5-land`, 0.1° land-only
              reanalysis). ERA5-Land has no pressure levels.
 
+- `poll_interval`: Ceiling (seconds) on the delay between CDS job-status checks
+                   (default 1, matching CDSAPI.jl). Hourly requests are small and
+                   usually finish within a minute, so a long ceiling mostly adds idle
+                   time after the job completes. `monthly` and `yearly` keep 10.
+- Remaining keywords are forwarded to `retrieve`.
+
 Returns a vector of downloaded file paths, one per variable.
 
 # File naming
@@ -60,7 +66,7 @@ function hourly(; variables::Union{String, AbstractVector{String}}, startyear::I
                   area=nothing, pressure_levels=nothing, levels=nothing, dataset::Symbol=:era5,
                   format::String="netcdf", outputprefix::String="era5", overwrite::Bool=false,
                   threads::Int=Threads.nthreads(), splitmonths::Bool=false,
-                  directory::String=".", additional_kw...)
+                  directory::String=".", poll_interval=1, additional_kw...)
 
     variables_arr = variables isa String ? [variables] : collect(variables)
 
@@ -134,7 +140,7 @@ function hourly(; variables::Union{String, AbstractVector{String}}, startyear::I
         asyncmap(pending; ntasks=max(threads, 1)) do variable
             params = copy(request_params)
             params["variable"] = variable
-            retrieve(dataset_id, params, output_file(variable))
+            retrieve(dataset_id, params, output_file(variable); poll_interval, additional_kw...)
         end
     end
 
@@ -281,9 +287,7 @@ function monthly(;
                 retrieve(dataset_id,
                         params,
                         output_path;
-                        max_wait = 3600,
-                        poll_interval = 10,
-                        verbose = true)
+                        merge((; max_wait = 3600, poll_interval = 10, verbose = true), additional_kw)...)
 
                 push!(results, output_path)
                 file_size_mb = round(filesize(output_path)/1e6, digits=1)
@@ -422,9 +426,7 @@ function yearly(;
             retrieve(dataset_id,
                     params,
                     output_path;
-                    max_wait = 3600,
-                    poll_interval = 10,
-                    verbose = true)
+                    merge((; max_wait = 3600, poll_interval = 10, verbose = true), additional_kw)...)
 
             push!(results, output_path)
             file_size_mb = round(filesize(output_path)/1e6, digits=1)
