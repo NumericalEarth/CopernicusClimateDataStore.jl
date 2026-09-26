@@ -154,4 +154,39 @@ using CopernicusClimateDataStore
         end
     end
 
+    # Redefines `retrieve` inside the module, so this testset must stay last.
+    @testset "poll_interval plumbing (offline)" begin
+        calls = Dict{String, Any}[]
+        @eval CopernicusClimateDataStore function retrieve(dataset::String, params::Dict, output_path::String; kw...)
+            push!($calls, Dict{String, Any}("kw" => Dict(kw), "path" => output_path))
+            write(output_path, "stub")
+            return output_path
+        end
+
+        mktempdir() do dir
+            hourly(; variables="2m_temperature", startyear=2019, months=5, days=10, hours=0,
+                   directory=dir, outputprefix="default")
+            @test calls[end]["kw"][:poll_interval] == 1
+
+            hourly(; variables="2m_temperature", startyear=2019, months=5, days=10, hours=0,
+                   directory=dir, outputprefix="override", poll_interval=3, verbose=false)
+            @test calls[end]["kw"][:poll_interval] == 3
+            @test calls[end]["kw"][:verbose] == false
+
+            monthly(; variables="2m_temperature", year=2019, month=5, directory=dir, outputprefix="m_default")
+            @test calls[end]["kw"][:poll_interval] == 10
+
+            monthly(; variables="2m_temperature", year=2019, month=5, directory=dir,
+                    overwrite=true, poll_interval=2)
+            @test calls[end]["kw"][:poll_interval] == 2
+
+            yearly(; variables="2m_temperature", years=2019, directory=dir, outputprefix="y_default")
+            @test calls[end]["kw"][:poll_interval] == 10
+
+            yearly(; variables="2m_temperature", years=2019, directory=dir,
+                   overwrite=true, poll_interval=4)
+            @test calls[end]["kw"][:poll_interval] == 4
+        end
+    end
+
 end
