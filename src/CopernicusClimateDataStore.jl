@@ -150,7 +150,7 @@ end
 """
     monthly(; variables, year, month, area=nothing, pressure_levels=nothing,
             format="netcdf", outputprefix="era5_monthly", directory=pwd(),
-            overwrite=false, threads=Threads.nthreads(), additional_kw...)
+            overwrite=false, threads=Threads.nthreads(), poll_interval=10, additional_kw...)
 
 Download full month(s) of ERA5 data in single files per variable.
 
@@ -171,6 +171,8 @@ files individually.
 - `directory`: Output directory (default: pwd())
 - `overwrite`: Overwrite existing files (default: false)
 - `threads`: Number of download threads (default: 1)
+- `poll_interval`: Ceiling (seconds) on the delay between CDS job-status checks (default: 10)
+- Remaining keywords are forwarded to `retrieve`.
 
 # Returns
 Vector of paths to downloaded files
@@ -216,6 +218,7 @@ function monthly(;
     directory = pwd(),
     overwrite = false,
     threads = Threads.nthreads(),
+    poll_interval = 10,
     additional_kw...
 )
     dataset_id, product_type = resolve_dataset(dataset, pressure_levels)
@@ -285,9 +288,10 @@ function monthly(;
 
                 # Download using direct CDS API
                 retrieve(dataset_id,
-                        params,
-                        output_path;
-                        merge((; max_wait = 3600, poll_interval = 10, verbose = true), additional_kw)...)
+                         params,
+                         output_path;
+                         poll_interval,
+                     additional_kw...)
 
                 push!(results, output_path)
                 file_size_mb = round(filesize(output_path)/1e6, digits=1)
@@ -302,7 +306,7 @@ end
 """
     yearly(; variables, years, area=nothing, pressure_levels=nothing,
            format="netcdf", outputprefix="era5_yearly", directory=pwd(),
-           overwrite=false, threads=Threads.nthreads(), additional_kw...)
+           overwrite=false, threads=Threads.nthreads(), poll_interval=10, additional_kw...)
 
 Download full year(s) of ERA5 data in single files per variable.
 
@@ -322,6 +326,8 @@ downloading hourly files individually.
 - `directory`: Output directory (default: pwd())
 - `overwrite`: Overwrite existing files (default: false)
 - `threads`: Number of download threads (default: 1)
+- `poll_interval`: Ceiling (seconds) on the delay between CDS job-status checks (default: 10)
+- Remaining keywords are forwarded to `retrieve`.
 
 # Returns
 Vector of paths to downloaded files
@@ -357,6 +363,7 @@ function yearly(;
     directory = pwd(),
     overwrite = false,
     threads = Threads.nthreads(),
+    poll_interval = 10,
     additional_kw...
 )
     dataset_id, product_type = resolve_dataset(dataset, pressure_levels)
@@ -424,9 +431,10 @@ function yearly(;
 
             # Download using direct CDS API
             retrieve(dataset_id,
-                    params,
-                    output_path;
-                    merge((; max_wait = 3600, poll_interval = 10, verbose = true), additional_kw)...)
+                     params,
+                     output_path;
+                     poll_interval,
+                     additional_kw...)
 
             push!(results, output_path)
             file_size_mb = round(filesize(output_path)/1e6, digits=1)
