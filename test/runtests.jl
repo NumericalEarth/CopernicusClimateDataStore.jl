@@ -114,6 +114,29 @@ using CopernicusClimateDataStore
         end
     end
 
+    @testset "extract_zip_members (offline)" begin
+        mktempdir() do dir
+            for name in ("data_instant.nc", "data_accum.nc")
+                write(joinpath(dir, name), "bytes of $name")
+            end
+            zip_path = joinpath(dir, "response.nc")
+            run(Cmd(`zip -j -q $zip_path $(joinpath(dir, "data_instant.nc")) $(joinpath(dir, "data_accum.nc"))`))
+
+            members = extract_zip_members(zip_path)
+            @test length(members) == 2
+            @test !isfile(zip_path)
+            @test sort(basename.(members)) == ["response_data_accum.nc", "response_data_instant.nc"]
+            @test read(joinpath(dir, "response_data_accum.nc"), String) == "bytes of data_accum.nc"
+        end
+
+        mktempdir() do dir
+            plain_path = joinpath(dir, "plain.nc")
+            write(plain_path, "not a zip")
+            @test extract_zip_members(plain_path) == [plain_path]
+            @test read(plain_path, String) == "not a zip"
+        end
+    end
+
     @testset "ERA5 Download Integration Test" begin
         # Only run if CDS credentials are available
         has_credentials = try
@@ -186,6 +209,33 @@ using CopernicusClimateDataStore
             yearly(; variables="2m_temperature", years=2019, directory=dir,
                    overwrite=true, poll_interval=4)
             @test calls[end]["kw"][:poll_interval] == 4
+        end
+
+        mktempdir() do dir
+            batch_calls = Dict{String, Any}[]
+            @eval CopernicusClimateDataStore function retrieve(dataset::String, params::Dict, output_path::String; kw...)
+                push!($batch_calls, Dict{String, Any}("params" => params, "kw" => Dict(kw), "path" => output_path))
+                members = String[]
+                for name in ("instant", "accum")
+                    push!(members, joinpath(dirname(output_path), "member_$name.nc"))
+                    write(last(members), "bytes of $name")
+                end
+                run(Cmd(`zip -j -q $output_path $members`))
+                rm.(members)
+                return output_path
+            end
+
+            variables = ["2m_temperature", "total_precipitation", "surface_pressure"]
+            files = Base.invokelatest(hourly; variables, startyear=2019, months=5, days=[10, 11], hours=[0, 1],
+                                      directory=dir, outputprefix="batched", batch=true)
+
+            @test length(batch_calls) == 1
+            @test batch_calls[1]["params"]["variable"] == variables
+            @test batch_calls[1]["kw"][:unwrap_zip] == false
+            @test batch_calls[1]["kw"][:poll_interval] == 1
+            @test length(files) == 2
+            @test all(isfile, files)
+            @test !isfile(batch_calls[1]["path"])
         end
     end
 

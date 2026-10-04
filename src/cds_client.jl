@@ -208,14 +208,14 @@ end
 
 Download file from CDS result URL.
 """
-function download_cds_file(url::String, output_path::String, credentials::CDSCredentials)
+function download_cds_file(url::String, output_path::String, credentials::CDSCredentials; unwrap_zip=true)
     mkpath(dirname(output_path))
 
     # Add authentication header
     headers = ["PRIVATE-TOKEN" => credentials.key]
     request_with_retries(() -> Downloads.download(url, output_path; headers); what="CDS file download")
 
-    unwrap_zip_response!(output_path)
+    unwrap_zip && unwrap_zip_response!(output_path)
 
     return output_path
 end
@@ -247,7 +247,33 @@ function unwrap_zip_response!(output_path::String)
 end
 
 """
-    retrieve(dataset, params, output_path; credentials=nothing, max_wait=3600, poll_interval=10, verbose=true)
+    extract_zip_members(path)
+
+Return the paths of the files delivered at `path`. A zip archive (which CDS returns when a
+request mixes step types, e.g. instantaneous and accumulated variables) is replaced by its
+members, written next to it as `<stem>_<member name>`; any other file is returned as is.
+"""
+function extract_zip_members(path::String)
+    is_zip_file(path) || return [path]
+
+    stem = first(splitext(path))
+    members = String[]
+    mktempdir() do tmpdir
+        run(`unzip -o -q $path -d $tmpdir`)
+        for member in filter(isfile, readdir(tmpdir; join=true))
+            member_path = string(stem, "_", basename(member))
+            mv(member, member_path; force=true)
+            push!(members, member_path)
+        end
+    end
+
+    isempty(members) && error("CDS response at $path was a zip archive but contained no files")
+    rm(path; force=true)
+    return members
+end
+
+"""
+    retrieve(dataset, params, output_path; credentials=nothing, max_wait=3600, poll_interval=10, verbose=true, unwrap_zip=true)
 
 Download data from Copernicus Climate Data Store using CDS API v2.
 
@@ -259,6 +285,8 @@ Download data from Copernicus Climate Data Store using CDS API v2.
 - `max_wait`: Maximum wait time for request (seconds)
 - `poll_interval`: How often to check request status (seconds)
 - `verbose`: Print progress messages
+- `unwrap_zip`: Replace a zip response by its first member (default). Pass `false` to keep the
+                response as delivered, e.g. to read every member with [`extract_zip_members`](@ref).
 
 # Example
 ```julia
@@ -284,7 +312,8 @@ function retrieve(dataset::String,
                  credentials=nothing,
                  max_wait=3600,
                  poll_interval=10,
-                 verbose=true)
+                 verbose=true,
+                 unwrap_zip=true)
 
     # Get credentials
     creds = isnothing(credentials) ? read_cds_credentials() : credentials
@@ -297,7 +326,7 @@ function retrieve(dataset::String,
                                        max_wait, poll_interval, verbose)
 
     # Download file
-    download_cds_file(download_url, output_path, creds)
+    download_cds_file(download_url, output_path, creds; unwrap_zip)
 
     return output_path
 end
